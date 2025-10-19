@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.azure_openai_config import get_azure_chat_service
 from agent_framework.azure import AzureOpenAIChatClient
-
+from tools.functions.time import get_time
 # Validate environment before creating the client
 chat_client = get_azure_chat_service()
 logging.info(f"Loaded Openai service: {chat_client.endpoint}")
@@ -15,7 +15,8 @@ logging.info(f"Loaded Openai service: {chat_client.endpoint}")
 agent = chat_client.create_agent(
     name="HelpDeskAgent",
     description="You are helpfull assitant",
-    instructions="Always guide user to route it to respective team based on user queries."
+    instructions="Always guide user to route it to respective team based on user queries.",
+    tools=[get_time]
 )
 
 
@@ -43,7 +44,7 @@ async def main():
             print("Assistant: ", end="", flush=True)  
               
             # Stream the response and maintain thread context  
-            result = await agent.run(messages=user_input, thread=thread) 
+            result = await agent.run(messages=user_input, thread=thread)
             print(result.text, end="", flush=True)  
               
             print()  # New line after response  
