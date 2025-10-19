@@ -69,37 +69,6 @@ async def tools_on_agent_level() -> None:
     print(f"Agent: {result3.text}\n")
 
 
-# async def tools_on_run_level() -> None:
-#     """Example showing tools passed to the run method."""
-#     print("=== Tools Passed to Run Method ===")
-
-#     # Agent created without tools
-#     # For authentication, run `az login` command in terminal or replace AzureCliCredential with preferred
-#     # authentication option.
-#     agent = chat_client.create_agent(
-#     name="HelpDeskAgent",
-#     description="You are helpfull assitant",
-#     instructions="Always guide user to route it to respective team based on user queries.",
-#     tools=[get_time, get_weather]
-#     )
-#     # First query with weather tool
-#     query1 = "What's the weather like in Seattle?"
-#     print(f"User: {query1}")
-#     result1 = await agent.run(messages=query1, tools=[get_weather])  # Tool passed to run method
-#     print(f"Agent: {result1}\n")
-
-#     # Second query with time tool
-#     query2 = "What's the current UTC time?"
-#     print(f"User: {query2}")
-#     result2 = await agent.run(query2, tools=[get_time])  # Different tool for this query
-#     print(f"Agent: {result2}\n")
-
-#     # Third query with multiple tools
-#     query3 = "What's the weather in Chicago and what's the current UTC time?"
-#     print(f"User: {query3}")
-#     result3 = await agent.run(query3, tools=[get_weather, get_time])  # Multiple tools
-#     print(f"Agent: {result3}\n")
-
 
 
 
