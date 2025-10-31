@@ -1,4 +1,3 @@
-# Copyright (c) Microsoft. All rights reserved.
 import os, sys
 import asyncio
 from datetime import datetime, timezone

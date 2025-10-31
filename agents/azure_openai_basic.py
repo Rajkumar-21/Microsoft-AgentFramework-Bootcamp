@@ -15,7 +15,7 @@ logging.info(f"Loaded Openai service: {chat_client.endpoint}")
 agent = chat_client.create_agent(
     name="HelpDeskAgent",
     description="You are helpfull assitant",
-    instructions="Always guide user to route it to respective team based on user queries.",
+    instructions="You help users to give current time information. Always provide the current IST time when asked.",
     tools=[get_time]
 )
 

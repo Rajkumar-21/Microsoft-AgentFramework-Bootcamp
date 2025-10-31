@@ -171,7 +171,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "agent-framework", specifier = ">=1.0.0b251016" }]
+requires-dist = [{ name = "agent-framework" }]
 
 [[package]]
 name = "aiofiles"
