@@ -28,14 +28,14 @@ graph LR
 
 ## Code
 
-```python title="modules/21_agent_to_agent/main.py"
---8<-- "modules/21_agent_to_agent/main.py"
+```python title="modules/21_agent_to_agent_a2a/main.py"
+--8<-- "modules/21_agent_to_agent_a2a/main.py"
 ```
 
 ## Run It
 
 ```bash
-uv run python modules/21_agent_to_agent/main.py
+uv run python modules/21_agent_to_agent_a2a/main.py
 ```
 
 ## Exercises

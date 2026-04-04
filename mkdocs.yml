@@ -83,8 +83,6 @@ plugins:
 nav:
   - Home: index.md
   - Learning Plan: learning-plan.md
-  - Architecture:
-    - architecture/index.md
   - Examples:
     - examples/index.md
   - Basic:
