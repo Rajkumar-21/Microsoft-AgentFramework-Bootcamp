@@ -1,5 +1,6 @@
 def main():
-    print("Hello from agent-framework-samples!")
+    print("Hello from Microsoft Agent Framework Bootcamp!")
+    print("🤖🎉😎")
 
 
 if __name__ == "__main__":

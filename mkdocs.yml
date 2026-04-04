@@ -1,0 +1,120 @@
+site_name: Microsoft Agent Framework Bootcamp
+site_description: Step-by-step learning path for the Microsoft Agent Framework (Python SDK)
+site_author: Rajkumar
+repo_url: https://github.com/Rajkumar-21/Microsoft-AgentFramework-Bootcamp
+repo_name: Microsoft-AgentFramework-Bootcamp
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  logo: assets/images/maf-logo.png
+  favicon: assets/images/maf-logo.png
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.path
+    - navigation.instant
+    - navigation.instant.progress
+    - content.code.copy
+    - content.code.annotate
+    - content.tooltips
+    - search.highlight
+    - search.suggest
+    - search.share
+    - toc.integrate
+    - header.autohide
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js
+  - javascripts/mermaid-init.js
+  - javascripts/diagram-zoom.js
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Learning Plan: learning-plan.md
+  - Architecture:
+    - architecture/index.md
+  - Examples:
+    - examples/index.md
+  - Basic:
+    - basic/index.md
+    - 01 - Setup & Configuration: basic/01-setup-and-configuration.md
+    - 02 - Hello Agent: basic/02-hello-agent.md
+    - 03 - Providers Deep Dive: basic/03-providers-deep-dive.md
+    - 04 - Function Tools: basic/04-function-tools.md
+    - 05 - Conversation Threads: basic/05-conversation-threads.md
+    - 06 - Streaming Responses: basic/06-streaming-responses.md
+  - Intermediate:
+    - intermediate/index.md
+    - 07 - Structured Outputs: intermediate/07-structured-outputs.md
+    - 08 - Hosted Tools: intermediate/08-hosted-tools.md
+    - 09 - MCP Tools: intermediate/09-mcp-tools.md
+    - 10 - Middleware System: intermediate/10-middleware-system.md
+    - 11 - Workflows Sequential: intermediate/11-workflows-sequential.md
+    - 12 - Workflows Handoff: intermediate/12-workflows-handoff.md
+    - 13 - Workflows Concurrent: intermediate/13-workflows-concurrent.md
+  - Advanced:
+    - advanced/index.md
+    - 14 - Agent-as-Tool: advanced/14-agent-as-tool.md
+    - 15 - Supervisor Agent: advanced/15-supervisor-agent.md
+    - 16 - Sub-Workflows: advanced/16-sub-workflows.md
+    - 17 - Human-in-the-Loop: advanced/17-human-in-the-loop.md
+    - 18 - Memory & Persistence: advanced/18-memory-persistence.md
+    - 19 - Observability: advanced/19-observability.md
+    - 20 - Declarative Agents: advanced/20-declarative-agents.md
+    - 21 - Agent-to-Agent (A2A): advanced/21-agent-to-agent.md
+    - 22 - Deployment: advanced/22-deployment.md
+    - 23 - Capstone Project: advanced/23-capstone-project.md
+  - Reference:
+    - reference/index.md

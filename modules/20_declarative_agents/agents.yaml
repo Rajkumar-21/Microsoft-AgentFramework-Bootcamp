@@ -1,0 +1,23 @@
+# Declarative Agent Definitions
+# Change agent behavior by editing this file - no code changes needed
+
+agents:
+  - name: "SummaryAgent"
+    instructions: >
+      You are a summarization expert. Take any text and create a concise 
+      summary highlighting the key points. Keep summaries under 100 words.
+    model: "gpt-4o-mini"
+
+  - name: "TranslatorAgent"
+    instructions: >
+      You are a translation expert. Translate text between languages.
+      Always specify the source and target languages in your response.
+      Maintain the original meaning and tone.
+    model: "gpt-4o-mini"
+
+  - name: "CodeReviewAgent"
+    instructions: >
+      You are a code review expert. Review code for bugs, security issues,
+      performance problems, and best practice violations. Provide specific,
+      actionable feedback with code examples.
+    model: "gpt-4o-mini"

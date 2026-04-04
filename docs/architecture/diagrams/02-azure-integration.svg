@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 -15 1840 1195" width="100%" height="100%" style="font-family:Segoe UI,Inter,system-ui,sans-serif;background:#fff">
+<defs>
+<marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#666"/></marker>
+</defs>
+<text x="950.0" y="35.0" text-anchor="middle" dominant-baseline="central" font-size="20" font-weight="bold" font-style="normal" fill="#1e1b4b">MAF — Azure Service Integration (AI Customer Support System)</text>
+
+<rect x="60.0" y="90.0" width="200.0" height="220.0" rx="6" fill="#e1d5e7" stroke="#9673a6" stroke-width="2" />
+
+<text x="160.0" y="106.0" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="bold" font-style="normal" fill="#5b21b6">Client Layer</text>
+
+<rect x="85.0" y="130.0" width="150.0" height="45.0" rx="6" fill="#e1d5e7" stroke="#9673a6" stroke-width="1" />
+<text x="160.0" y="148.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">Web App</text>
+<text x="160.0" y="163.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">(React/Next.js)</text>
+
+<rect x="85.0" y="190.0" width="150.0" height="45.0" rx="6" fill="#e1d5e7" stroke="#9673a6" stroke-width="1" />
+<text x="160.0" y="208.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">Microsoft Teams</text>
+<text x="160.0" y="223.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">Bot Channel</text>
+
+<rect x="85.0" y="248.0" width="150.0" height="40.0" rx="6" fill="#e1d5e7" stroke="#9673a6" stroke-width="1" />
+<text x="160.0" y="271.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">REST API Client</text>
+
+<rect x="320.0" y="70.0" width="1520.0" height="1080.0" rx="6" fill="#f0f4ff" stroke="#6B4FBB" stroke-width="3" />
+
+<text x="340.0" y="91.0" text-anchor="start" dominant-baseline="central" font-size="16" font-weight="bold" font-style="normal" fill="#6B4FBB">Azure Cloud</text>
+
+
+<text x="410.0" y="205.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">Azure Container Apps</text>
+<text x="410.0" y="218.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">(MAF Runtime)</text>
+
+<rect x="520.0" y="110.0" width="600.0" height="300.0" rx="6" fill="#d5e8d4" stroke="#82b366" stroke-width="2" />
+
+<text x="790.0" y="127.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="bold" font-style="normal" fill="#15803d">Microsoft Agent Framework Runtime</text>
+
+<rect x="540.0" y="160.0" width="140.0" height="55.0" rx="6" fill="#d5e8d4" stroke="#82b366" stroke-width="2" />
+<text x="610.0" y="183.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">Triage Agent</text>
+<text x="610.0" y="198.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">(Handoff Router)</text>
+
+<rect x="720.0" y="155.0" width="110.0" height="40.0" rx="6" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" />
+<text x="775.0" y="178.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">Sales Agent</text>
+
+<rect x="720.0" y="205.0" width="110.0" height="40.0" rx="6" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" />
+<text x="775.0" y="228.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">Support Agent</text>
+
+<rect x="720.0" y="255.0" width="110.0" height="40.0" rx="6" fill="#dae8fc" stroke="#6c8ebf" stroke-width="1" />
+<text x="775.0" y="278.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">Billing Agent</text>
+
+<rect x="870.0" y="175.0" width="140.0" height="55.0" rx="6" fill="#fff2cc" stroke="#d6b656" stroke-width="2" />
+<text x="940.0" y="198.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">Supervisor Agent</text>
+<text x="940.0" y="213.5" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#333">(Coordinator)</text>
+
+<rect x="540.0" y="310.0" width="220.0" height="40.0" rx="6" fill="#e6f4ea" stroke="#82b366" stroke-width="1" />
+<text x="650.0" y="326.0" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#333">Middleware Pipeline</text>
+<text x="650.0" y="340.0" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#333">(Logging / Auth / Rate Limit)</text>
+
+<rect x="790.0" y="310.0" width="140.0" height="40.0" rx="6" fill="#f8cecc" stroke="#b85450" stroke-width="1" />
+<text x="860.0" y="326.0" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#333">Function Tools</text>
+<text x="860.0" y="340.0" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#333">(CRM, Ticket, KB)</text>
+
+<rect x="950.0" y="310.0" width="140.0" height="40.0" rx="6" fill="#f8cecc" stroke="#b85450" stroke-width="1" />
+<text x="1020.0" y="326.0" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#333">MCP Tools</text>
+<text x="1020.0" y="340.0" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#333">(External APIs)</text>
+
+<rect x="540.0" y="365.0" width="220.0" height="35.0" rx="6" fill="#e6f4ea" stroke="#82b366" stroke-width="1" />
+<text x="650.0" y="378.5" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#333">Response Handler</text>
+<text x="650.0" y="392.5" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#333">(Text / Structured / Stream)</text>
+
+
+<text x="420.0" y="575.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">Azure OpenAI</text>
+<text x="420.0" y="588.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">GPT-4o</text>
+
+
+<text x="570.0" y="560.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">Azure AI Search</text>
+<text x="570.0" y="573.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">(Knowledge Base)</text>
+
+
+<text x="730.0" y="572.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">Cosmos DB</text>
+<text x="730.0" y="585.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">(Chat History)</text>
+
+
+<text x="880.0" y="575.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">Key Vault</text>
+<text x="880.0" y="588.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">(Secrets)</text>
+
+
+<text x="1020.0" y="572.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">App Insights</text>
+<text x="1020.0" y="585.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">(Observability)</text>
+
+
+<text x="1170.0" y="570.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">Service Bus</text>
+<text x="1170.0" y="583.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">(Events)</text>
+
+
+<text x="1318.0" y="570.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">Azure Functions</text>
+<text x="1318.0" y="583.0" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" font-style="normal" fill="#333">(Event Handlers)</text>
+
+<ellipse cx="284.0" cy="149.0" rx="14.0" ry="14.0" fill="#6B4FBB" stroke="none" />
+<text x="284.0" y="149.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="bold" fill="#fff">1</text>
+
+<ellipse cx="444.0" cy="164.0" rx="14.0" ry="14.0" fill="#6B4FBB" stroke="none" />
+<text x="444.0" y="164.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="bold" fill="#fff">2</text>
+
+<ellipse cx="704.0" cy="174.0" rx="14.0" ry="14.0" fill="#6B4FBB" stroke="none" />
+<text x="704.0" y="174.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="bold" fill="#fff">3</text>
+
+<ellipse cx="859.0" cy="174.0" rx="14.0" ry="14.0" fill="#6B4FBB" stroke="none" />
+<text x="859.0" y="174.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="bold" fill="#fff">4</text>
+
+<ellipse cx="369.0" cy="484.0" rx="14.0" ry="14.0" fill="#6B4FBB" stroke="none" />
+<text x="369.0" y="484.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="bold" fill="#fff">5</text>
+
+<line x1="680.0" y1="182.1969696969697" x2="720.0" y2="179.16666666666666" stroke="#6c8ebf" stroke-width="2"  marker-end="url(#arrowhead)" />
+
+<line x1="680.0" y1="203.4090909090909" x2="720.0" y2="212.5" stroke="#6c8ebf" stroke-width="2"  marker-end="url(#arrowhead)" />
+
+<line x1="661.8571428571429" y1="215.0" x2="737.2857142857143" y2="255.0" stroke="#6c8ebf" stroke-width="2"  marker-end="url(#arrowhead)" />
+
+<line x1="830.0" y1="184.16666666666666" x2="870.0" y2="190.83333333333334" stroke="#d6b656" stroke-width="2"  marker-end="url(#arrowhead)" />
+
+<line x1="830.0" y1="217.5" x2="870.0" y2="212.04545454545453" stroke="#d6b656" stroke-width="2"  marker-end="url(#arrowhead)" />
+
+<line x1="820.5172413793103" y1="255.0" x2="877.4137931034483" y2="230.0" stroke="#d6b656" stroke-width="2"  marker-end="url(#arrowhead)" />
+
+<line x1="235.0" y1="158.33333333333334" x2="540.0" y2="182.05555555555554" stroke="#9673a6" stroke-width="2"  marker-end="url(#arrowhead)" />
+<text x="387.5" y="164.19444444444446" text-anchor="middle" font-size="9" fill="#9673a6">HTTPS</text>
+
+<line x1="594.4933920704846" y1="215.0" x2="433.7885462555066" y2="500.0" stroke="#0078D4" stroke-width="2"  marker-end="url(#arrowhead)" />
+<text x="514.1409691629956" y="351.5" text-anchor="middle" font-size="9" fill="#0078D4">LLM Inference</text>
+
+<line x1="829.2631578947369" y1="350.0" x2="596.0" y2="501.7808219178082" stroke="#0078D4" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowhead)" />
+<text x="712.6315789473684" y="419.8904109589041" text-anchor="middle" font-size="9" fill="#0078D4">RAG</text>
+
+<line x1="657.7551020408164" y1="350.0" x2="715.9183673469388" y2="500.0" stroke="#0078D4" stroke-width="2"  marker-end="url(#arrowhead)" />
+<text x="686.8367346938776" y="419.0" text-anchor="middle" font-size="9" fill="#0078D4">Sessions</text>
+
+<line x1="934.7619047619048" y1="230.0" x2="883.3333333333334" y2="500.0" stroke="#d6b656" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowhead)" />
+<text x="909.047619047619" y="359.0" text-anchor="middle" font-size="9" fill="#d6b656">Secrets</text>
+
+<line x1="687.5510204081633" y1="350.0" x2="1000.0" y2="516.4130434782609" stroke="#ea580c" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowhead)" />
+<text x="843.7755102040817" y="427.20652173913044" text-anchor="middle" font-size="9" fill="#ea580c">Traces</text>
+
+<line x1="1035.2577319587629" y1="350.0" x2="1149.6907216494844" y2="500.0" stroke="#0078D4" stroke-width="2"  marker-end="url(#arrowhead)" />
+<text x="1092.4742268041236" y="419.0" text-anchor="middle" font-size="9" fill="#0078D4">Events</text>
+
+<line x1="1196.0" y1="524.1866666666666" x2="1290.0" y2="524.8133333333334" stroke="#0078D4" stroke-width="2"  marker-end="url(#arrowhead)" />
+
+</svg>
