@@ -1,5 +1,9 @@
 # Module 03: Providers Deep Dive
 
+> **Scenario — Northwind IT Service Desk triage.** The *same* triage agent runs
+> unchanged on **Azure OpenAI** and **Azure AI Foundry** — only the client construction
+> differs. This proves the framework's provider portability and shows keyless auth.
+
 ## Learning Objectives
 - Understand the three main providers: AzureOpenAI, OpenAI, AzureAIAgentsProvider
 - Learn when to use each provider
@@ -26,6 +30,13 @@
 3. Compare response behavior between providers
 4. Experiment with different model deployments
 
+## How to Run
+```bash
+cd modules/03_providers_deep_dive
+python azure_openai_provider.py   # Azure OpenAI (API key or AzureCliCredential)
+python azure_ai_provider.py      # Azure AI Foundry (AzureCliCredential; az login first)
+```
+
 ## Files
-- `azure_openai_provider.py` - AzureOpenAIChatClient example
-- `azure_ai_provider.py` - AzureAIAgentsProvider example
+- `azure_openai_provider.py` - Triage agent on `AzureOpenAIChatClient`
+- `azure_ai_provider.py` - Same triage agent on `AzureAIAgentClient` (Foundry)

@@ -1,0 +1,236 @@
+:root {
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --accent: #06b6d4;
+  --bg: #0b0e1a;
+  --surface: #141a2e;
+  --surface-2: #1c2440;
+  --border: #283154;
+  --text: #e7eaf6;
+  --muted: #98a2c0;
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+}
+
+/* Top bar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 18px;
+}
+.brand__mark {
+  color: var(--brand-500);
+  font-size: 22px;
+}
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 13px;
+}
+.who__scopes {
+  color: var(--muted);
+  font-size: 11px;
+}
+.dev-pill {
+  background: var(--surface-2);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+}
+.btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.btn--primary {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+}
+
+/* Catalog */
+.catalog {
+  margin-top: 28px;
+}
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.tab {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.tab--active {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--brand-500);
+}
+.search {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-size: 15px;
+  margin-bottom: 22px;
+}
+.search::placeholder {
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.card:hover {
+  border-color: var(--brand-500);
+  transform: translateY(-2px);
+}
+.card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.card__version {
+  color: var(--muted);
+  font-size: 12px;
+}
+.card__title {
+  margin: 0;
+  font-size: 17px;
+}
+.card__summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.badge {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.badge--agent {
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+}
+.badge--mcp_server {
+  background: rgba(6, 182, 212, 0.18);
+  color: #67e8f9;
+}
+.badge--skill {
+  background: rgba(168, 85, 247, 0.18);
+  color: #d8b4fe;
+}
+.meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+.meta dt {
+  color: var(--muted);
+}
+.meta dd {
+  margin: 0;
+  word-break: break-all;
+}
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+}
+.card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  background: var(--surface-2);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.card__foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.vis--public {
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+}
+.error {
+  color: #fca5a5;
+}
+.page-foot {
+  margin-top: 40px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}

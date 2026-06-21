@@ -1,5 +1,10 @@
 # Module 01: Setup & Configuration
 
+> **Scenario — "Atlas" platform readiness check.** A production-style, dependency-free
+> validator that gates workstations and CI runners before anyone writes an agent.
+> It checks the Python runtime, the `agent-framework` package, and Azure credentials,
+> then exits `0` (ready) or `1` (blocked).
+
 ## Learning Objectives
 - Set up Python environment with `uv` and `agent-framework`
 - Configure Azure OpenAI and Azure AI Foundry credentials
@@ -16,8 +21,7 @@
 # Azure OpenAI (for Modules 02-10)
 AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
 AZURE_OPENAI_API_KEY=<your-key>
-AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o-mini
-AZURE_OPENAI_API_VERSION=2025-01-01-preview
+AZURE_OPENAI_CHAT_DEPLOYMENT_NAME=gpt-4o
 
 # Azure AI Foundry (for hosted agents)
 AZURE_AI_PROJECT_ENDPOINT=https://<project>.services.ai.azure.com/api/projects/<id>
@@ -34,6 +38,11 @@ BING_CONNECTION_ID=<bing-connection-id>
 3. Write a config validation script
 4. Test authentication with AzureCliCredential
 
+## How to Run
+```bash
+cd modules/01_setup_and_configuration
+python main.py   # exit 0 = ready, exit 1 = blocked
+```
+
 ## Files
-- `main.py` - Configuration setup and validation
-- `.env.example` - Template for environment variables
+- `main.py` - Readiness validator (safe to run in CI; never calls a model)

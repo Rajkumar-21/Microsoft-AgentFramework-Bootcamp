@@ -1,0 +1,24 @@
+# azd configuration — provisions Container Apps + Cosmos DB and deploys the API.
+# Usage:
+#   azd auth login
+#   azd up
+name: agent-registry
+metadata:
+  template: agent-registry@0.1.0
+
+services:
+  api:
+    project: .
+    language: python
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+
+hooks:
+  postprovision:
+    posix:
+      shell: sh
+      run: echo "Registry API:" $SERVICE_API_URI
+    windows:
+      shell: pwsh
+      run: Write-Host "Registry API:" $env:SERVICE_API_URI

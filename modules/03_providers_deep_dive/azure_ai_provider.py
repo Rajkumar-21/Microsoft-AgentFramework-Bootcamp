@@ -1,44 +1,51 @@
 """
-Module 03: Provider - FoundryChatClient (Azure AI Foundry)
-Create agents backed by Azure AI Foundry project deployments.
+Module 03 — Providers Deep Dive (B): Azure AI Foundry
+=====================================================
+
+Scenario: Northwind IT — Service Desk Triage (Foundry edition)
+--------------------------------------------------------------
+This is the *same* triage agent as `azure_openai_provider.py`, but backed by a
+model deployed in an **Azure AI Foundry** project. Notice that `TRIAGE_INSTRUCTIONS`
+and the `create_agent(...)` / `run(...)` calls are identical — only the client
+differs. That portability is a core Agent Framework design goal.
+
+`AzureAIAgentClient` uses keyless auth via `DefaultAzureCredential` and reads
+`AZURE_AI_PROJECT_ENDPOINT` + `AZURE_AI_MODEL_DEPLOYMENT_NAME` from the
+environment. Run `az login` first for local development.
 """
 
 import asyncio
-import os
 
-from agent_framework import Agent
-from agent_framework.foundry import FoundryChatClient
+from agent_framework.azure import AzureAIAgentClient
 from azure.identity.aio import AzureCliCredential
 
 
-async def main():
-    # FoundryChatClient — connect to a model deployed in Azure AI Foundry
-    # Uses AzureCliCredential for local dev (az login first)
+TRIAGE_INSTRUCTIONS = """\
+You are the Northwind IT Service Desk triage agent.
+For each ticket, respond with exactly three lines:
+  Priority: <P1|P2|P3|P4>   (P1 = outage/security, P4 = how-to question)
+  Queue: <Network|Identity|Hardware|Software|Security>
+  Summary: <one sentence>
+Be decisive. Do not ask follow-up questions."""
+
+SAMPLE_TICKET = (
+    "A finance manager reports a phishing email that asks for MFA codes; "
+    "three people may have clicked the link. Needs urgent attention."
+)
+
+
+async def main() -> None:
+    # The credential is async — use it as an async context manager so tokens
+    # are acquired and disposed cleanly.
     async with AzureCliCredential() as credential:
-        client = FoundryChatClient(
-            project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
-            model=os.environ["FOUNDRY_MODEL"],
-            credential=credential,
-        )
+        client = AzureAIAgentClient(async_credential=credential)
 
-        # Option A: Convenience method
-        agent = client.as_agent(
-            name="FoundryAgent",
-            instructions="You are a helpful assistant powered by Azure AI Foundry.",
-        )
+        agent = client.create_agent(name="ITTriageAgent", instructions=TRIAGE_INSTRUCTIONS)
 
-        result = await agent.run("Explain what Azure AI Foundry is in 2 sentences.")
-        print(f"[Foundry .as_agent()] {result.text}")
-
-        # Option B: Explicit Agent constructor
-        agent2 = Agent(
-            client=client,
-            name="FoundryAgent2",
-            instructions="You are a concise assistant.",
-        )
-
-        result2 = await agent2.run("What is the Microsoft Agent Framework?")
-        print(f"[Foundry Agent()] {result2.text}")
+        print(f"Ticket: {SAMPLE_TICKET}\n")
+        response = await agent.run(SAMPLE_TICKET)
+        print("[Azure AI Foundry]")
+        print(response.text)
 
 
 if __name__ == "__main__":

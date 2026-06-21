@@ -1,96 +1,120 @@
 """
-Module 04: Function Tools
-Create custom tools that agents can call during execution.
+Module 04 — Function Tools
+==========================
 
-Uses the @tool decorator from agent_framework to define function tools.
-Tools are passed to as_agent() or Agent() via the tools= parameter.
+Scenario: Lakeside Outfitters — Order Operations Agent
+------------------------------------------------------
+A support agent for an e-commerce ops team. It can look up an order, check
+warehouse stock, estimate a delivery date, and start a refund — all by calling
+typed Python functions the model invokes on demand.
+
+Key ideas:
+  * Tools are plain Python functions. Type hints + `Annotated[..., Field(...)]`
+    descriptions tell the model how to call them; the docstring becomes the
+    tool description.
+  * Pass them with `create_agent(..., tools=[fn1, fn2, ...])`.
+  * The model decides *which* tool(s) to call and *when* — including chaining
+    several in one turn.
+
+This module uses in-memory fixtures so it runs without external systems.
 """
 
 import asyncio
 import os
-from datetime import datetime, timezone
+from datetime import date, timedelta
 from typing import Annotated
 
+from agent_framework.azure import AzureOpenAIChatClient
 from pydantic import Field
 
-from agent_framework import tool
-from agent_framework.openai import OpenAIChatClient
+
+# --- Fake systems of record (stand-ins for OMS / WMS / payments) -------------
+_ORDERS = {
+    "LO-10231": {"status": "packed", "sku": "TENT-4P", "qty": 1, "region": "WA"},
+    "LO-10477": {"status": "shipped", "sku": "BAG-65L", "qty": 2, "region": "NY"},
+    "LO-10588": {"status": "processing", "sku": "STOVE-X2", "qty": 1, "region": "TX"},
+}
+_INVENTORY = {"TENT-4P": 14, "BAG-65L": 0, "STOVE-X2": 37}
+_TRANSIT_DAYS = {"WA": 2, "NY": 4, "TX": 3}
 
 
-# ---------------------------------------------------------------------------
-# Tool 1: Weather lookup
-# ---------------------------------------------------------------------------
-@tool
-def get_weather(
-    location: Annotated[str, Field(description="City name to get weather for")],
+def lookup_order_status(
+    order_id: Annotated[str, Field(description="Order ID, e.g. 'LO-10231'")],
 ) -> str:
-    """Get the current weather for a given location."""
-    # In production, call a real weather API
-    weather_data = {
-        "Seattle": "62°F, Cloudy",
-        "New York": "75°F, Sunny",
-        "London": "55°F, Rainy",
-    }
-    return weather_data.get(location, f"Weather data not available for {location}")
+    """Return the current fulfillment status of an order."""
+    order = _ORDERS.get(order_id.upper())
+    if not order:
+        return f"No order found with ID {order_id}."
+    return f"Order {order_id.upper()} is '{order['status']}' ({order['qty']}x {order['sku']})."
 
 
-# ---------------------------------------------------------------------------
-# Tool 2: Current time
-# ---------------------------------------------------------------------------
-@tool
-def get_current_time() -> str:
-    """Get the current date and time in UTC."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-
-
-# ---------------------------------------------------------------------------
-# Tool 3: Calculator
-# ---------------------------------------------------------------------------
-@tool
-def calculate(
-    expression: Annotated[str, Field(description="Math expression to evaluate, e.g. '2 + 3 * 4'")],
+def check_inventory(
+    sku: Annotated[str, Field(description="Product SKU, e.g. 'TENT-4P'")],
 ) -> str:
-    """Evaluate a mathematical expression safely."""
-    allowed_chars = set("0123456789+-*/().% ")
-    if not all(c in allowed_chars for c in expression):
-        return "Error: Only basic math operations are allowed."
-    try:
-        result = eval(expression)  # Safe due to character allowlist above
-        return f"{expression} = {result}"
-    except Exception as e:
-        return f"Error evaluating expression: {e}"
+    """Check how many units of a SKU are available in the warehouse."""
+    if sku.upper() not in _INVENTORY:
+        return f"SKU {sku} is not in the catalog."
+    count = _INVENTORY[sku.upper()]
+    state = "out of stock" if count == 0 else f"{count} units available"
+    return f"{sku.upper()}: {state}."
 
 
-async def main():
-    # --- Azure OpenAI via OpenAIChatClient (Responses API) ---
-    client = OpenAIChatClient(
-        model=os.environ["AZURE_OPENAI_MODEL"],
-        azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-        api_key=os.environ["AZURE_OPENAI_API_KEY"]
+def estimate_delivery(
+    order_id: Annotated[str, Field(description="Order ID to estimate delivery for")],
+) -> str:
+    """Estimate the delivery date for an order based on its destination region."""
+    order = _ORDERS.get(order_id.upper())
+    if not order:
+        return f"No order found with ID {order_id}."
+    days = _TRANSIT_DAYS.get(order["region"], 5)
+    eta = date.today() + timedelta(days=days)
+    return f"Order {order_id.upper()} should arrive around {eta.isoformat()} ({days} days)."
+
+
+def initiate_refund(
+    order_id: Annotated[str, Field(description="Order ID to refund")],
+    reason: Annotated[str, Field(description="Short reason for the refund")],
+) -> str:
+    """Start a refund for an order. Returns a refund reference number."""
+    order = _ORDERS.get(order_id.upper())
+    if not order:
+        return f"Cannot refund — no order found with ID {order_id}."
+    ref = f"RF-{order_id.upper()[-5:]}"
+    return f"Refund {ref} initiated for {order_id.upper()} (reason: {reason})."
+
+
+def build_client() -> AzureOpenAIChatClient:
+    deployment = os.environ.get("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME") or os.environ["AZURE_OPENAI_MODEL"]
+    return AzureOpenAIChatClient(
+        endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+        api_key=os.environ["AZURE_OPENAI_API_KEY"],
+        deployment_name=deployment,
     )
 
-    # Create agent with multiple tools via as_agent()
-    agent = client.as_agent(
-        name="ToolsAgent",
+
+async def main() -> None:
+    client = build_client()
+
+    agent = client.create_agent(
+        name="OrderOpsAgent",
         instructions=(
-            "You are a helpful assistant with access to weather, time, and "
-            "calculator tools. Use them when appropriate."
+            "You are Lakeside Outfitters' order operations assistant. "
+            "Use the available tools to answer questions about orders, stock, "
+            "delivery dates, and refunds. Be concise and confirm actions you take."
         ),
-        tools=[get_weather, get_current_time, calculate],
+        tools=[lookup_order_status, check_inventory, estimate_delivery, initiate_refund],
     )
 
-    # Test each tool
-    queries = [
-        "What's the weather in Seattle?",
-        "What time is it right now?",
-        "What is 125 * 37 + 99?",
-        "What's the weather in London and what time is it?",
+    conversations = [
+        "What's the status of order LO-10231 and when will it arrive?",
+        "Is BAG-65L in stock? Order LO-10477 has 2 of them.",
+        "Refund order LO-10588 — the customer changed their mind.",
     ]
 
-    for query in queries:
-        print(f"\nUser: {query}")
-        result = await agent.run(query)
-        print(f"Agent: {result.text}")
+    for query in conversations:
+        print(f"\nUser:  {query}")
+        response = await agent.run(query)
+        print(f"Agent: {response.text}")
 
 
 if __name__ == "__main__":

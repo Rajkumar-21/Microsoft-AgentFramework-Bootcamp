@@ -1,23 +1,32 @@
 # Module 04: Function Tools
 
+> **Scenario — Lakeside Outfitters Order Operations Agent.** A support agent that
+> resolves real requests — order status, stock checks, delivery ETAs, and refunds —
+> by calling typed Python functions the model invokes on demand (and chains together).
+
 ## Learning Objectives
 - Create custom function tools for agents
-- Use `@ai_function` decorator and `Annotated[type, Field()]` for parameters
-- Pass functions directly to `tools=[]` parameter
+- Use type hints + `Annotated[type, Field(description=...)]` for parameters
+- Pass plain functions directly to the `tools=[]` parameter
 - Understand auto-conversion of Python functions to AI-callable tools
 
 ## Key Concepts
-- **`@ai_function`** - Decorator to mark functions as agent tools
-- **`Annotated[str, Field(description=...)]`** - Typed parameters with descriptions
-- **Docstrings** - Used as tool descriptions by the framework
-- **Return values** - String responses back to the agent
+- **Plain functions as tools** - no decorator required; pass them in `tools=[...]`
+- **`Annotated[str, Field(description=...)]`** - typed parameters with descriptions
+- **Docstrings** - used as the tool description by the framework
+- **Tools as a trust boundary** - validate and authorize inside the function
 
 ## Exercises
-1. Create a weather lookup tool
-2. Create a time/date tool  
-3. Create a calculator tool
-4. Combine multiple tools in one agent
-5. Observe how the agent decides which tool to call
+1. Add a `track_shipment` tool that returns a carrier + tracking number
+2. Make `initiate_refund` require an order in a refundable state
+3. Observe the agent chaining `lookup_order_status` + `estimate_delivery`
+4. Add audit logging inside `initiate_refund`
+
+## How to Run
+```bash
+cd modules/04_function_tools
+python main.py
+```
 
 ## Files
-- `main.py` - Agent with multiple function tools
+- `main.py` - Order operations agent with four typed tools
