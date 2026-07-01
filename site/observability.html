@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Observability · Agent Framework Bootcamp</title>
+  <meta name="description" content="See inside your agents with OpenTelemetry — configure traces, logs, and GenAI metrics with configure_otel_providers(), view them live in the Aspire Dashboard, and ship to Azure Monitor / Application Insights for the Pulse support desk." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 16 min</span>
+          </div>
+          <h1>Observability</h1>
+          <p class="doc-lead">
+            You can't operate what you can't see. When an agent loops, stalls, or burns tokens, you need
+            <strong>traces, logs, and metrics</strong>. Agent Framework emits standard
+            <strong>OpenTelemetry GenAI</strong> telemetry out of the box — one call wires it up. You'll
+            instrument the <strong>Pulse support desk</strong>, watch every agent + tool span live in the
+            <strong>Aspire Dashboard</strong>, then ship the same signals to <strong>Azure Monitor</strong>.
+          </p>
+
+          <h2>One pipeline, many backends</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Pulse: telemetry from agent to dashboard</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    A{{"🎧 Pulse Agent"}} -->|"spans + metrics"| O["📡 configure_otel_providers()"]
+    O -->|"OTLP :4317"| C["🛰️ Collector"]
+    C --> D1["📊 Aspire Dashboard (local)"]
+    C --> D2["☁️ Azure Monitor / App Insights"]
+    C --> D3["🔭 Any OTLP backend"]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class A,O hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Because the framework speaks OTLP, the same instrumentation feeds a local dashboard in dev and your enterprise APM in prod — no code change.</div>
+          </div>
+
+          <h2>1 · Turn on telemetry</h2>
+          <p>
+            Install the observability extra, then call <code>configure_otel_providers()</code> once at startup.
+            Set <code>ENABLE_CONSOLE_EXPORTERS=true</code> to print spans to your terminal while developing.
+          </p>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">install</span></div>
+            <pre class="terminal__body"><span class="l-rule">pip install agent-framework --pre</span>
+<span class="l-comment"># console output while developing</span>
+<span class="l-rule">export ENABLE_CONSOLE_EXPORTERS=true</span></pre>
+          </div>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from typing import Annotated
+from pydantic import Field
+from agent_framework import tool
+from agent_framework.azure import AzureOpenAIChatClient
+from agent_framework.observability import configure_otel_providers
+
+
+@tool
+def lookup_order(order_id: Annotated[str, Field(description="Order ID")]) -> str:
+    """Look up an order's status."""
+    return f"Order {order_id}: shipped, arriving Thursday."
+
+
+async def main() -> None:
+    configure_otel_providers()  # traces + logs + GenAI metrics
+
+    client = AzureOpenAIChatClient()
+    pulse = client.create_agent(
+        name="Pulse",
+        instructions="You are a support agent. Use tools to answer order questions.",
+        tools=[lookup_order],
+    )
+
+    reply = await pulse.run("Where is order A-7781?")
+    print(reply.text)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <h2>2 · View traces live in the Aspire Dashboard</h2>
+          <p>
+            The .NET Aspire Dashboard is a zero-config OTLP viewer — perfect for local development. Run it in
+            Docker and point your app's OTLP endpoint at it.
+          </p>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">aspire dashboard</span></div>
+            <pre class="terminal__body"><span class="l-rule">docker run --rm -it -p 18888:18888 -p 4317:18889 \
+  mcr.microsoft.com/dotnet/aspire-dashboard:latest</span>
+<span class="l-comment"># then tell the app where to send OTLP</span>
+<span class="l-rule">export OTLP_ENDPOINT=http://localhost:4317</span>
+<span class="l-agent">Dashboard → http://localhost:18888  (traces, structured logs, metrics)</span></pre>
+          </div>
+          <p>
+            Open the dashboard and you'll see one trace per run, with nested spans: the agent invocation, the
+            chat-completion call (with token counts), and each tool call — all following the OpenTelemetry
+            GenAI semantic conventions.
+          </p>
+
+          <h2>3 · Ship to Azure Monitor in production</h2>
+          <p>
+            Same instrumentation, enterprise backend. Install the Azure Monitor distro and the framework routes
+            its OTLP stream to Application Insights.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">azure_monitor.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python"># pip install azure-monitor-opentelemetry
+from azure.monitor.opentelemetry import configure_azure_monitor
+from agent_framework.observability import configure_otel_providers
+
+# Reads APPLICATIONINSIGHTS_CONNECTION_STRING from the environment
+configure_azure_monitor()
+configure_otel_providers()
+# Agent traces now flow into Application Insights → end-to-end transaction view</code></pre>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Prefer standard OTEL_* env vars</div>
+              <div class="callout__body">Instead of hard-coding endpoints, set the standard <code>OTEL_EXPORTER_OTLP_ENDPOINT</code>, <code>OTEL_SERVICE_NAME</code>, and related variables. The framework honors them, so the same build runs against any collector in any environment.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">Sensitive data is off by default</div>
+              <div class="callout__body">Prompt and response contents are <em>not</em> captured unless you opt in (e.g. <code>enable_instrumentation(enable_sensitive_data=True)</code>). Keep it off in production unless your logging store is approved for that data.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Debug visually with DevUI</div>
+              <div class="callout__body">During development, <code>serve(entities=[pulse], tracing_enabled=True)</code> launches a local web UI where you chat with the agent and inspect each trace inline — invaluable before you wire up the production pipeline you'll deploy in <a href="deployment.html">Deployment</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Human in the Loop · Agent Framework Bootcamp</title>
+  <meta name="description" content="Pause a workflow for human approval before a sensitive action with @tool(approval_mode='always_require') — build the Sentinel payments desk that requires sign-off before executing a wire transfer, then resumes with the human's decision." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 17 min</span>
+          </div>
+          <h1>Human in the Loop</h1>
+          <p class="doc-lead">
+            Autonomy is great — until an agent is about to move money, delete data, or email a customer. For
+            those moments you want a <strong>checkpoint a human must clear</strong>. Agent Framework workflows
+            pause on <code>@tool(approval_mode="always_require")</code>, emit a request, and wait. You'll build
+            the <strong>Sentinel payments desk</strong>: an agent that must get human sign-off before executing
+            a wire transfer, then resumes with the decision.
+          </p>
+
+          <h2>Pause → approve → resume</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Sentinel: a gated wire transfer</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TD
+    U["💬 'Wire $48,000 to vendor X'"] --> A{{"🏦 Payments Agent"}}
+    A -->|"wants to call execute_wire"| P["⏸️ request_info\nfunction_approval_request"]
+    P --> H{"🧑‍⚖️ Human reviews"}
+    H -->|"approved=True"| RES["▶️ resume → tool runs"]
+    H -->|"approved=False"| DEN["⛔ resume → tool skipped"]
+    RES --> OUT[["Confirmation"]]
+    DEN --> OUT2[["Declined, no transfer"]]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class A,P,H hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">The workflow suspends at the tool call and emits a <code>request_info</code> event. Nothing executes until you send a response keyed by the request id.</div>
+          </div>
+
+          <h2>1 · Mark the sensitive tool for approval</h2>
+          <p>
+            <code>approval_mode="always_require"</code> tells the framework: never run this tool without explicit
+            human sign-off. No extra builder config is needed — <code>SequentialBuilder</code> handles the pause.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from typing import Annotated
+from pydantic import Field
+from agent_framework import SequentialBuilder, tool
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+@tool(approval_mode="always_require")
+def execute_wire(
+    payee: Annotated[str, Field(description="Beneficiary name")],
+    amount_usd: Annotated[float, Field(description="Amount in USD")],
+) -> str:
+    """Execute a wire transfer. Requires human approval before running."""
+    return f"WIRE SENT: ${amount_usd:,.2f} to {payee} (ref TXN-90421)."
+
+
+async def main() -> None:
+    client = AzureOpenAIChatClient()
+
+    payments_agent = client.create_agent(
+        name="PaymentsAgent",
+        instructions=(
+            "You process vendor payments. When asked to pay, call execute_wire with "
+            "the payee and amount. Confirm the result to the user."
+        ),
+        tools=[execute_wire],
+    )
+
+    workflow = SequentialBuilder(participants=[payments_agent]).build()</code></pre>
+          </div>
+
+          <h2>2 · Catch the request, decide, resume</h2>
+          <p>
+            Run with <code>stream=True</code>. When an event's <code>type == "request_info"</code>, the
+            payload (<code>event.data</code>) is a <code>Content</code> with
+            <code>type == "function_approval_request"</code>. Build a response with
+            <code>to_function_approval_response(approved=...)</code> and feed it back via
+            <code>responses={request_id: ...}</code>. Runs aren't isolated — state carries across calls.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py (cont.)</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">    async def pump(stream) -> dict | None:
+        """Collect approval requests; print any agent output."""
+        responses: dict = {}
+        async for event in stream:
+            if event.type == "request_info":
+                req = event.data  # Content, type == "function_approval_request"
+                fc = req.function_call
+                # In a real app: route to a reviewer UI / queue. Here: simple policy.
+                approved = fc.arguments.get("amount_usd", 0) <= 50_000
+                print(f"[approval] {fc.name}({fc.arguments}) -> approved={approved}")
+                responses[event.request_id] = req.to_function_approval_response(approved=approved)
+            elif getattr(event, "text", None):
+                print(event.text, end="", flush=True)
+        return responses or None
+
+    stream = workflow.run("Pay vendor Northwind Supplies $48,000.", stream=True)
+    pending = await pump(stream)
+    while pending is not None:
+        stream = workflow.run(stream=True, responses=pending)
+        pending = await pump(stream)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — sentinel payments desk</span></div>
+            <pre class="terminal__body"><span class="l-comment">[run] PaymentsAgent wants to call execute_wire...</span>
+<span class="l-rule">[approval] execute_wire({'payee': 'Northwind Supplies', 'amount_usd': 48000}) -> approved=True</span>
+<span class="l-comment">[resume] approval granted → tool executes</span>
+<span class="l-agent">Done — WIRE SENT: $48,000.00 to Northwind Supplies (ref TXN-90421).
+The payment to Northwind Supplies has been completed.</span></pre>
+          </div>
+
+          <h2>Two ways to involve a human</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Mechanism</th><th>What it gates</th><th>How</th></tr></thead>
+              <tbody>
+                <tr><td>Tool approval</td><td>A specific sensitive tool call</td><td><code>@tool(approval_mode="always_require")</code></td></tr>
+                <tr><td>Request info</td><td>A pause after an agent, for feedback/review</td><td><code>.with_request_info()</code> on the builder</td></tr>
+                <tr><td>Custom executor</td><td>Any point in a hand-built graph</td><td><code>ctx.request_info()</code> + <code>@response_handler</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">A denial is not an error</div>
+              <div class="callout__body">When <code>approved=False</code>, the tool is skipped and the agent continues with that knowledge — it doesn't crash. Make sure your instructions tell the agent how to respond gracefully to a declined action.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Durable approvals across restarts</div>
+              <div class="callout__body">In production a human may take hours to approve. Pass <code>checkpoint_storage=</code> to the builder: pending requests are saved with the checkpoint, so the process can exit and a later run re-emits the <code>request_info</code> event to be answered. Combine with <a href="memory-persistence.html">memory &amp; persistence</a> for fully resumable workflows.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent as Tool · Agent Framework Bootcamp</title>
+  <meta name="description" content="Turn a specialist agent into a callable tool with as_tool() and let a coordinator agent delegate to it — build the Atlas travel concierge that routes to flight, hotel, and weather specialists." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 15 min</span>
+          </div>
+          <h1>Agent as Tool</h1>
+          <p class="doc-lead">
+            The simplest way to compose agents is to make one agent a <strong>tool</strong> of another.
+            <code>as_tool()</code> wraps any agent in an <code>AIFunction</code>, so a coordinator can call
+            specialists exactly like it calls a Python function — the model decides which one and when.
+            You'll build the <strong>Atlas travel concierge</strong>: one front-desk agent that delegates to
+            flight, hotel, and weather specialists.
+          </p>
+
+          <h2>One coordinator, three specialists</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Atlas: concierge delegates via as_tool()</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TD
+    U["🧳 Traveler request"] --> C{{"🛎️ Atlas Concierge"}}
+    C -->|"as_tool"| F["✈️ Flight Specialist"]
+    C -->|"as_tool"| H["🏨 Hotel Specialist"]
+    C -->|"as_tool"| W["🌤️ Weather Specialist"]
+    F --> C
+    H --> C
+    W --> C
+    C --> R[["Itinerary reply"]]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class C,F,H,W hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Each specialist is a self-contained agent exposed as a function. The concierge sees only their final text — full context isolation.</div>
+          </div>
+
+          <h2>1 · Build the specialist agents</h2>
+          <p>
+            Specialists are ordinary agents. Give each a tight, single responsibility and (optionally) its own
+            function tools. Here the flight and hotel specialists carry mock lookup tools.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from typing import Annotated
+from pydantic import Field
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+def search_flights(
+    origin: Annotated[str, Field(description="Departure city/airport")],
+    destination: Annotated[str, Field(description="Arrival city/airport")],
+) -> str:
+    """Return mock flight options for a route."""
+    return f"{origin}->{destination}: AT204 $480 (nonstop, 7h15m), AT118 $410 (1 stop)."
+
+
+def search_hotels(
+    city: Annotated[str, Field(description="City to stay in")],
+    nights: Annotated[int, Field(description="Number of nights")],
+) -> str:
+    """Return mock hotel options for a city."""
+    return f"{city} x{nights}n: The Mariner $190/n (4.6*), Ceylon Suites $250/n (4.8*)."
+
+
+async def main() -> None:
+    client = AzureOpenAIChatClient()
+
+    flight_agent = client.create_agent(
+        name="FlightSpecialist",
+        instructions="You find flights. Always call search_flights, then summarize the best 2 options.",
+        tools=[search_flights],
+    )
+    hotel_agent = client.create_agent(
+        name="HotelSpecialist",
+        instructions="You find hotels. Always call search_hotels, then recommend one with a reason.",
+        tools=[search_hotels],
+    )
+    weather_agent = client.create_agent(
+        name="WeatherSpecialist",
+        instructions="Give a short, seasonal packing-relevant weather outlook for the destination.",
+    )</code></pre>
+          </div>
+
+          <h2>2 · Wrap each specialist with <code>as_tool()</code></h2>
+          <p>
+            <code>as_tool()</code> returns an <code>AIFunction</code>. The <strong>name</strong> and
+            <strong>description</strong> are what the coordinator's model reads to decide routing — write them
+            like you'd write a tool docstring. <code>arg_name</code> controls the single string argument the
+            coordinator passes (default <code>"task"</code>).
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py (cont.)</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">    concierge = client.create_agent(
+        name="AtlasConcierge",
+        instructions=(
+            "You are a travel concierge. Use the flight, hotel, and weather tools to "
+            "assemble a complete trip plan. Call each specialist as needed, then write "
+            "one friendly itinerary that combines their answers."
+        ),
+        tools=[
+            flight_agent.as_tool(
+                name="get_flights",
+                description="Find flight options. Input: origin, destination, and dates.",
+                arg_name="request",
+            ),
+            hotel_agent.as_tool(
+                name="get_hotels",
+                description="Find hotel options. Input: city and number of nights.",
+                arg_name="request",
+            ),
+            weather_agent.as_tool(
+                name="get_weather",
+                description="Get a seasonal weather outlook for a destination.",
+                arg_name="request",
+            ),
+        ],
+    )
+
+    resp = await concierge.run(
+        "Plan a 4-night trip from Boston to Colombo in March — flights, a hotel, "
+        "and what to pack."
+    )
+    print(resp.text)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — atlas concierge</span></div>
+            <pre class="terminal__body"><span class="l-comment">[concierge] calling get_flights, get_hotels, get_weather...</span>
+<span class="l-agent">Here's your Boston -> Colombo plan for March (4 nights):
+
+✈️  Flights: AT204 nonstop at $480 (7h15m) is the easy pick; AT118 saves $70
+    with one stop if budget matters.
+🏨  Hotel: Ceylon Suites ($250/n, 4.8*) — closest to the old fort and the
+    highest rated of the two.
+🌤️  Weather: Warm and humid, high 80s°F with afternoon showers. Pack light
+    breathable clothes, sandals, and a compact rain shell.
+
+Want me to lock in AT204 and Ceylon Suites?</span></pre>
+          </div>
+
+          <h2>How it differs from a handoff</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Aspect</th><th>Agent-as-tool</th><th>Handoff workflow</th></tr></thead>
+              <tbody>
+                <tr><td>Control</td><td>Coordinator stays in charge; specialists return and control comes back</td><td>Control is <em>transferred</em> to the next agent</td></tr>
+                <tr><td>Context</td><td>Isolated — specialist sees only the task string</td><td>Shared conversation moves with the handoff</td></tr>
+                <tr><td>Best for</td><td>Delegating a bounded sub-task and composing results</td><td>Routing a whole conversation to the right owner</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Descriptions are the routing logic</div>
+              <div class="callout__body">There is no router code — the coordinator's model picks tools purely from their <code>name</code> and <code>description</code>. Vague descriptions cause wrong or skipped calls. Treat them like API contracts.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Stateless by design</div>
+              <div class="callout__body">Each <code>as_tool()</code> invocation is a fresh run, so specialists don't accumulate state between calls — safe to fan out and reuse across requests. When you need a manager that plans, critiques, and iterates over specialists rather than just calling them once, graduate to the <a href="supervisor-agent.html">supervisor pattern</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

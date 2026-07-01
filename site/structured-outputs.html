@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Structured Outputs · Agent Framework Bootcamp</title>
+  <meta name="description" content="Turn free-text into typed, validated data with response_format and Pydantic — build the Meridian Mutual First Notice of Loss intake agent that emits a schema-perfect claim record." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Tools &amp; Workflows</span>
+            <span class="badge badge--intermediate">Intermediate</span>
+            <span>⏱️ 14 min</span>
+          </div>
+          <h1>Structured Outputs</h1>
+          <p class="doc-lead">
+            A paragraph of prose is fine for a human, but downstream systems need <em>fields</em>.
+            With <strong>structured outputs</strong> you hand the agent a <strong>Pydantic model</strong>
+            and get back a validated object — not a string you have to parse with regex. You'll build the
+            <strong>Meridian Mutual First Notice of Loss (FNOL) agent</strong>: it reads a messy claim
+            description and emits a schema-perfect record ready to drop into a claims system.
+          </p>
+
+          <h2>Why structured outputs</h2>
+          <p>
+            Free-text answers are unpredictable: today the model writes "policy #A-7781", tomorrow
+            "Policy number A7781". A schema removes the guesswork — the model is constrained to your
+            shape, types are coerced, and missing required fields raise a validation error instead of
+            silently corrupting your pipeline.
+          </p>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">From prose to typed record</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    A["Free-text claim call<br/>(unstructured)"] --> B{{"Agent + response_format"}}
+    B --> C["ClaimIntake<br/>Pydantic model"]
+    C --> D[["resp.value<br/>typed object"]]
+    D --> E[(Claims system)]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class B hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">The model is constrained to your schema; <code>resp.value</code> is a validated instance you can persist directly.</div>
+          </div>
+
+          <h2>1 · Define the schema</h2>
+          <p>
+            Model the claim with <code>BaseModel</code>. Use <code>Field(description=...)</code> to guide the
+            model on each attribute, and <code>Enum</code>/typed fields to lock down categorical values. The
+            descriptions become part of the schema the model sees.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">schema.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from enum import Enum
+from pydantic import BaseModel, Field
+
+
+class ClaimType(str, Enum):
+    auto = "auto"
+    property = "property"
+    liability = "liability"
+    other = "other"
+
+
+class Severity(str, Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
+class ClaimIntake(BaseModel):
+    """A structured First Notice of Loss record."""
+
+    policy_number: str = Field(description="Policy identifier, normalized to A-NNNN form")
+    claimant_name: str = Field(description="Full name of the person reporting the loss")
+    claim_type: ClaimType = Field(description="Category of the claim")
+    incident_date: str = Field(description="Date of the incident in YYYY-MM-DD format")
+    location: str = Field(description="Where the incident occurred")
+    severity: Severity = Field(description="Triage severity based on described damage/injury")
+    summary: str = Field(description="One-sentence neutral summary of what happened")
+    injuries_reported: bool = Field(description="True if any injury was mentioned")
+    estimated_amount_usd: float | None = Field(
+        default=None, description="Rough loss estimate in USD if stated, else null"
+    )</code></pre>
+          </div>
+
+          <h2>2 · Ask for the schema with <code>response_format</code></h2>
+          <p>
+            Pass the model through the <code>options</code> dict on <code>run()</code>. The parsed instance
+            is on <code>resp.value</code>; the raw JSON is still on <code>resp.text</code> if you need it.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+async def main() -> None:
+    agent = AzureOpenAIChatClient().create_agent(
+        name="FNOL-Intake",
+        instructions=(
+            "You are a claims intake specialist for Meridian Mutual. "
+            "Extract a clean First Notice of Loss record from the caller's description. "
+            "Normalize the policy number to A-NNNN. If a value is not stated, infer "
+            "conservatively and never fabricate amounts."
+        ),
+    )
+
+    call = (
+        "Hi, this is Dana Whitfield, policy A 7781. Yesterday, May 3rd, someone "
+        "backed into my parked Civic outside the Glenwood Mall in Asheville. "
+        "Bumper's cracked, no one was hurt. Probably about twelve hundred bucks."
+    )
+
+    resp = await agent.run(call, options={"response_format": ClaimIntake})
+    claim: ClaimIntake = resp.value
+
+    print(f"Policy:    {claim.policy_number}")
+    print(f"Claimant:  {claim.claimant_name}")
+    print(f"Type:      {claim.claim_type.value} · severity {claim.severity.value}")
+    print(f"Incident:  {claim.incident_date} @ {claim.location}")
+    print(f"Injuries:  {claim.injuries_reported}")
+    print(f"Estimate:  ${claim.estimated_amount_usd:,.2f}")
+    print(f"Summary:   {claim.summary}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">value vs. text</div>
+              <div class="callout__body"><code>resp.value</code> is your typed model instance. <code>resp.text</code> is the raw JSON string. If parsing fails, <code>value</code> is <code>None</code> — check for it before using.</div>
+            </div>
+          </div>
+
+          <h2>Run it</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">bash</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-bash">cd modules/07_structured_outputs
+python main.py</code></pre>
+          </div>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — FNOL intake</span></div>
+            <pre class="terminal__body"><span class="l-comment">Policy:    A-7781</span>
+<span class="l-agent">Claimant:  Dana Whitfield
+Type:      auto · severity low
+Incident:  2026-05-03 @ Glenwood Mall, Asheville
+Injuries:  False
+Estimate:  $1,200.00
+Summary:   A parked Honda Civic was struck by another vehicle, cracking the bumper, with no injuries.</span></pre>
+          </div>
+
+          <h2>Streaming + structured output</h2>
+          <p>
+            You can stream <em>and</em> get a parsed result. Iterate for live updates, then call
+            <code>get_final_response()</code> — the stream's finalizer parses the schema for you.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">streamed parse</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">stream = agent.run(call, stream=True, options={"response_format": ClaimIntake})
+async for update in stream:
+    if update.text:
+        print(update.text, end="", flush=True)
+
+final = await stream.get_final_response()
+claim = final.value  # fully parsed ClaimIntake</code></pre>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Schemas are your API contract</div>
+              <div class="callout__body">When an agent feeds a database, a queue, or another service, the Pydantic model <em>is</em> the interface. Version it like any contract, keep required fields minimal, and let optional fields default to <code>None</code> so the model never has to invent data. This is the bridge from "chatbot" to "system component".</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

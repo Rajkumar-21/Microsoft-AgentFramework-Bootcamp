@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sub-Workflows · Agent Framework Bootcamp</title>
+  <meta name="description" content="Compose workflows by nesting one inside another with workflow.as_agent() — build the Nova publishing pipeline where a self-contained research sub-workflow becomes a single step in a larger draft-to-publish flow." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 15 min</span>
+          </div>
+          <h1>Sub-Workflows</h1>
+          <p class="doc-lead">
+            Real systems get big. The cure is <strong>composition</strong>: build small, testable workflows
+            and nest them. <code>workflow.as_agent()</code> turns an entire workflow into an
+            <code>AIAgent</code>, so it can be a single <em>participant</em> inside a larger workflow. You'll
+            build the <strong>Nova publishing pipeline</strong>, where a self-contained
+            <strong>research sub-workflow</strong> (gather → fact-check) becomes one step of the outer
+            draft → research → edit flow.
+          </p>
+
+          <h2>A workflow inside a workflow</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Nova: research sub-workflow nested in the publish pipeline</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    subgraph OUTER["Outer pipeline (Sequential)"]
+      DR["✍️ Drafter"] --> RS["🔬 Research (sub-workflow)"]
+      RS --> ED["🧹 Editor"]
+    end
+    subgraph INNER["Research sub-workflow"]
+      G["🔎 Gatherer"] --> FC["✅ Fact-Checker"]
+    end
+    RS -. as_agent .-> INNER
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class RS,G,FC hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">The research workflow is built, tested, and reused on its own — then dropped into the outer pipeline as if it were a single agent.</div>
+          </div>
+
+          <h2>1 · Build the inner research sub-workflow</h2>
+          <p>
+            It's an ordinary workflow — here a two-stage sequential pipeline. Nothing about it knows it will be
+            nested.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from agent_framework import SequentialBuilder
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+async def main() -> None:
+    client = AzureOpenAIChatClient()
+
+    # --- inner: research sub-workflow ---
+    gatherer = client.create_agent(
+        name="Gatherer",
+        instructions="Collect 4-6 concrete facts and figures relevant to the topic.",
+    )
+    fact_checker = client.create_agent(
+        name="FactChecker",
+        instructions="Review the facts. Flag anything unverifiable; keep only what is solid.",
+    )
+
+    research_workflow = SequentialBuilder(
+        participants=[gatherer, fact_checker]
+    ).build()</code></pre>
+          </div>
+
+          <h2>2 · Wrap it with <code>as_agent()</code> and nest it</h2>
+          <p>
+            <code>research_workflow.as_agent(name=...)</code> exposes the whole sub-workflow as one agent. The
+            outer <code>SequentialBuilder</code> treats it like any other participant — drafter, then the
+            research step, then editor.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py (cont.)</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">    research_step = research_workflow.as_agent(name="ResearchStep")
+
+    # --- outer: publish pipeline ---
+    drafter = client.create_agent(
+        name="Drafter",
+        instructions="Write a rough 150-word draft on the topic. Leave [RESEARCH] gaps.",
+    )
+    editor = client.create_agent(
+        name="Editor",
+        instructions="Fold the verified facts into the draft and tighten it to publish quality.",
+    )
+
+    publish_workflow = SequentialBuilder(
+        participants=[drafter, research_step, editor]
+    ).build()
+
+    result = await publish_workflow.run(
+        "Write a short explainer: why latency matters for checkout conversion."
+    )
+    for output in result.get_outputs():
+        print(output)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — nova pipeline</span></div>
+            <pre class="terminal__body"><span class="l-comment">[outer] Drafter → ResearchStep → Editor</span>
+<span class="l-comment">[ResearchStep] Gatherer → FactChecker (nested)</span>
+<span class="l-agent">Why latency matters for checkout conversion
+
+Every 100 ms of added latency cuts conversion by roughly 1% — and checkout is
+the most latency-sensitive step because intent is highest and patience lowest.
+Studies put cart abandonment from slow pages near 70%. Trimming p95 checkout
+latency from 1.8s to 0.9s typically recovers low-single-digit conversion,
+which on high-volume stores is millions in annual revenue...</span></pre>
+          </div>
+
+          <h2>Why compose this way</h2>
+          <ol class="steps">
+            <li><strong>Testable units</strong> — run and validate the research sub-workflow in isolation before nesting it.</li>
+            <li><strong>Reuse</strong> — the same <code>ResearchStep</code> can drop into a marketing pipeline, a report builder, or a chatbot.</li>
+            <li><strong>Encapsulation</strong> — the outer pipeline neither knows nor cares that research is two agents; it sees one.</li>
+          </ol>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Any builder nests in any builder</div>
+              <div class="callout__body">Because <code>as_agent()</code> yields a normal agent, you can nest a <a href="workflows-concurrent.html">concurrent</a> fan-out inside a <a href="workflows-sequential.html">sequential</a> pipeline, or a sub-workflow inside a <a href="supervisor-agent.html">supervisor's</a> participant list. Mix shapes freely.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Workflows as building blocks</div>
+              <div class="callout__body">Treat sub-workflows like microservices: a small team owns the "enrichment" workflow, another owns "compliance review," and platform teams compose them into product flows. Each ships, versions, and tests on its own cadence. This is how the <a href="capstone-project.html">capstone</a> assembles a full enterprise system.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

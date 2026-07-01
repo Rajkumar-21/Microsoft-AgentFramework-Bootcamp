@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Commerce Concierge · Agent Framework Bootcamp</title>
+  <meta name="description" content="A deployable retail shopping agent combining structured outputs, sequential/concurrent/handoff workflows, streaming, and agent-to-agent (A2A) calls — with capability discovery via the Agent Registry." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Real-World Projects</span>
+            <span class="badge badge--advanced">Deployable</span>
+            <span>⏱️ 25 min</span>
+          </div>
+          <h1>Commerce Concierge</h1>
+          <p class="doc-lead">
+            <strong>Commerce Concierge</strong> is a customer-facing retail agent. It finds products, checks
+            availability, prepares an order, and escalates to a human when unsure. It shows a different slice of
+            the framework from <a href="project-ops-copilot.html">Ops Copilot</a>: <strong>structured
+            outputs</strong>, <strong>sequential / concurrent / handoff workflows</strong>,
+            <strong>streaming</strong>, and <strong>agent-to-agent (A2A)</strong> calls.
+          </p>
+
+          <div class="callout callout--info">
+            <div class="callout__icon">📁</div>
+            <div>
+              <div class="callout__title">Where it lives</div>
+              <div class="callout__body">Source: <code>projects/commerce-concierge/</code>. It discovers a
+              published warehouse agent from the <a href="agent-registry.html">Agent Registry</a> and calls it
+              over A2A, and self-registers so storefronts can embed it.</div>
+            </div>
+          </div>
+
+          <h2>What it combines</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Capability</th><th>From</th><th>Role</th></tr></thead>
+              <tbody>
+                <tr><td>Structured outputs</td><td><a href="structured-outputs.html">Lesson 07</a></td><td>Typed intent, product pick, order draft</td></tr>
+                <tr><td>Hosted tools</td><td><a href="hosted-tools.html">Lesson 08</a></td><td>Shipping estimate</td></tr>
+                <tr><td>Sequential workflow</td><td><a href="workflows-sequential.html">Lesson 11</a></td><td>understand → recommend → quote</td></tr>
+                <tr><td>Concurrent fan-out</td><td><a href="workflows-concurrent.html">Lesson 13</a></td><td>catalog ∥ reviews ∥ inventory</td></tr>
+                <tr><td>Handoff workflow</td><td><a href="workflows-handoff.html">Lesson 12</a></td><td>Escalate to human support</td></tr>
+                <tr><td>Streaming</td><td><a href="streaming-responses.html">Lesson 06</a></td><td>Token-streamed replies</td></tr>
+                <tr><td>Agent-to-Agent</td><td><a href="agent-to-agent.html">Lesson 21</a></td><td>Warehouse reservation over A2A</td></tr>
+                <tr><td>Deployment</td><td><a href="deployment.html">Lesson 22</a></td><td><code>AgentFunctionApp</code> on Azure Functions</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>How a shopper request flows</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Commerce Concierge — find, recommend, quote, escalate</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TB
+    S["💬 Shopper"] --> U["📝 Understand<br/>structured intent"]
+    U --> R{"🔀 Research (concurrent)"}
+    R --> Cat["🛍️ Catalog"]
+    R --> Rev["⭐ Reviews"]
+    R --> Inv["📦 Inventory"]
+    R --> Rec["🎯 Recommend<br/>ProductPick"]
+    Rec --> Q["🧾 Quote<br/>OrderDraft"]
+    Q -. "needs_human" .-> H["🙋 Human Support"]
+    Q -. "A2A" .-> W["🏭 Warehouse"]
+    W -. "discovered" .-> Reg[("📚 Agent Registry")]
+
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class U,Rec,Q hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Intent is parsed into typed data, research runs in parallel, a single product is chosen, an order is drafted, and anything uncertain is handed to a human or reserved with the warehouse over A2A.</div>
+          </div>
+
+          <h2>1 · Typed outputs at every stage</h2>
+          <p>Pydantic models make the pipeline's hand-offs predictable — each stage returns structured data, not
+          free text.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">app/schemas.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from pydantic import BaseModel, Field
+
+class ProductPick(BaseModel):
+    sku: str
+    name: str
+    price: float
+    why: str = Field(description="One-sentence reason this fits the shopper.")
+
+class OrderDraft(BaseModel):
+    sku: str
+    quantity: int = 1
+    unit_price: float
+    shipping_estimate: float
+    total: float
+    needs_human: bool = Field(default=False, description="Human must confirm before placing.")</code></pre>
+          </div>
+
+          <h2>2 · Agents bound to their output schema</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">app/agents.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">recommend = client.create_agent(
+    name="Recommend",
+    instructions="Pick the single best product for the shopper given the research.",
+    response_format=ProductPick,
+)
+quote = client.create_agent(
+    name="Quote",
+    instructions="Prepare an OrderDraft incl. shipping; set needs_human if price > $150.",
+    tools=[estimate_shipping],
+    response_format=OrderDraft,
+)</code></pre>
+          </div>
+
+          <h2>3 · Compose sub-workflows: concurrent inside sequential, wrapped in handoff</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">app/workflow.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework import ConcurrentBuilder, HandoffBuilder, SequentialBuilder
+
+research = ConcurrentBuilder(participants=[catalog, reviews, inventory]).build()
+
+pipeline = SequentialBuilder(participants=[
+    understand,
+    research.as_agent(name="Research"),     # a sub-workflow as one step
+    recommend,
+    quote,
+]).build()
+
+concierge = HandoffBuilder(
+    participants=[pipeline.as_agent(name="Pipeline"), support]
+).build()</code></pre>
+          </div>
+
+          <h2>4 · Reach the warehouse over A2A (discovered from the registry)</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">app/agents.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework.a2a import A2AAgent
+from .registry import discover_warehouse_url
+
+url = await discover_warehouse_url()            # find a published 'warehouse' agent
+warehouse = A2AAgent(name="Warehouse", url=url) if url else None</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">run &amp; deploy</span></div>
+            <pre class="terminal__body"><span class="l-rule"># try it locally (replies stream token-by-token)</span>
+cd projects/commerce-concierge &amp;&amp; pip install -e .
+python -m app.run "I need a waterproof jacket for hiking under $150"
+
+<span class="l-rule"># deploy</span>
+pip install agent-framework-azurefunctions --pre
+func azure functionapp publish commerce-concierge-prod</pre>
+          </div>
+
+          <div class="callout callout--success">
+            <div class="callout__icon">🧩</div>
+            <div>
+              <div class="callout__title">Two apps, one platform</div>
+              <div class="callout__body">Ops Copilot and Commerce Concierge cover very different domains, yet both
+              plug into the same <a href="agent-registry.html">registry</a> for discovery and governance — the
+              pattern you'd reuse for any real Agent Framework system.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

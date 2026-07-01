@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Registry &amp; Marketplace · Agent Framework Bootcamp</title>
+  <meta name="description" content="A runnable, OAuth2-secured marketplace where Agent Framework agents, MCP servers, and skills are published, discovered, and governed — FastAPI + Microsoft Entra ID + Cosmos DB + a React UI." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Real-World Projects</span>
+            <span class="badge badge--advanced">Capstone+</span>
+            <span>⏱️ 30 min</span>
+          </div>
+          <h1>Agent Registry &amp; Marketplace</h1>
+          <p class="doc-lead">
+            Once you have many agents, MCP servers, and skills, teams need a place to
+            <strong>publish, discover, and govern</strong> them. The <strong>Agent Registry</strong> is a
+            runnable marketplace: a <strong>FastAPI</strong> service secured by <strong>Microsoft Entra ID
+            OAuth2</strong>, backed by <strong>Cosmos DB</strong>, with a <strong>React</strong> UI and a
+            client <strong>SDK</strong> so any Agent Framework agent can self-register and pull approved
+            capabilities at runtime.
+          </p>
+
+          <div class="callout callout--info">
+            <div class="callout__icon">📁</div>
+            <div>
+              <div class="callout__title">Where it lives</div>
+              <div class="callout__body">All source is in <code>agent-registry/</code> in the repo. The two
+              reference apps in <code>projects/</code> — <a href="project-ops-copilot.html">Ops Copilot</a> and
+              <a href="project-commerce-concierge.html">Commerce Concierge</a> — both use this registry.</div>
+            </div>
+          </div>
+
+          <h2>Architecture</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Registry — publish, discover, govern</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TB
+    Dev["🤖 AF Agent / SDK"] -->|"Bearer token"| API
+    UI["🖥️ React UI + MSAL"] -->|"Bearer token"| API
+    API{{"⚡ FastAPI<br/>Agent Registry"}} --> STORE{"Store"}
+    STORE -->|"local dev"| MEM[("🧠 In-memory")]
+    STORE -->|"production"| COSMOS[("🌌 Cosmos DB<br/>keyless RBAC")]
+    ENTRA["🔐 Microsoft Entra ID"] -. "validates JWT" .- API
+
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class API,ENTRA hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Agents and the UI authenticate with Entra ID; the API validates the token and reads/writes a store that is in-memory for dev and Cosmos DB (keyless, RBAC) in production.</div>
+          </div>
+
+          <h2>Three resource types</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Kind</th><th>Represents</th><th>Key fields</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Agent</strong></td><td>A deployed agent endpoint</td><td><code>endpoint</code>, <code>protocol</code> (a2a / openai / azure_functions), <code>auth</code>, <code>scopes</code></td></tr>
+                <tr><td><strong>MCP Server</strong></td><td>A tool server</td><td><code>url</code>, <code>transport</code> (streamable_http / stdio / websocket), <code>tools</code></td></tr>
+                <tr><td><strong>Skill</strong></td><td>A reusable prompt / tool / workflow</td><td><code>skill_kind</code>, <code>spec</code> (YAML), <code>inputs</code>, <code>outputs</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>The permission model</h2>
+          <p>Authorization uses three layered scopes. Delegated (user) tokens carry them in the
+          <code>scp</code> claim; app (client-credentials) tokens carry them in <code>roles</code>.</p>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Scope</th><th>Grants</th></tr></thead>
+              <tbody>
+                <tr><td><code>Registry.Read</code></td><td>List and read catalog entries</td></tr>
+                <tr><td><code>Registry.Publish</code></td><td>Read + publish/update your <em>own</em> entries</td></tr>
+                <tr><td><code>Registry.Manage</code></td><td>Full control, including deleting others' entries</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>1 · A token-validated, scoped API</h2>
+          <p>Every request is authenticated. In production the API verifies the JWT signature against the
+          tenant JWKS and checks the audience, issuer, and expiry; locally you can pass a dev token.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">app/routers/agents.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from fastapi import APIRouter, Depends
+from ..security import require_read, require_publish, require_manage
+
+router = APIRouter(prefix="/agents", tags=["agents"])
+
+@router.get("")                       # needs Registry.Read
+async def list_agents(principal=Depends(require_read), store=Depends(get_store)):
+    items, total = await store.list("agent", visible_to_org=principal.tenant_id)
+    return Page(items=items, count=len(items), total=total)
+
+@router.post("")                      # needs Registry.Publish
+async def publish_agent(body: AgentCreate, principal=Depends(require_publish), ...):
+    # publisher + partition key are set from the caller's identity
+    ...
+
+@router.delete("/{agent_id}")          # needs Registry.Manage
+async def delete_agent(agent_id: str, principal=Depends(require_manage), ...):
+    ...</code></pre>
+          </div>
+
+          <h2>2 · Keyless Cosmos DB storage</h2>
+          <p>Production uses one container per kind with a high-cardinality partition key
+          (<code>/partition_key</code> = publisher id), a singleton client, and
+          <strong>keyless</strong> <code>DefaultAzureCredential</code> auth — exactly the practices the
+          bootcamp's Cosmos guidance recommends.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">app/storage/cosmos.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from azure.cosmos.aio import CosmosClient
+from azure.identity.aio import DefaultAzureCredential
+
+class CosmosStore:
+    def __init__(self, settings):
+        # keyless: managed identity / az login — no secrets in code
+        self._client = CosmosClient(settings.cosmos_endpoint, DefaultAzureCredential())
+
+    async def list(self, kind, *, visible_to_org=None, query=None, tags=None, ...):
+        sql = "SELECT * FROM c WHERE 1=1"
+        params = []
+        if query:                       # targeted, parameterized search
+            sql += " AND CONTAINS(LOWER(c.name), @q)"; params.append({"name": "@q", "value": query.lower()})
+        # ... ARRAY_CONTAINS for tags, COUNT for total, OFFSET/LIMIT for paging</code></pre>
+          </div>
+
+          <h2>3 · Agents self-register with the SDK</h2>
+          <p>The client SDK lets any Agent Framework agent advertise itself and turn registered MCP servers
+          into live tools — discovery becomes one call.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">using the registry SDK</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from registry_client import RegistryClient
+
+async with RegistryClient(base_url="https://registry.internal", credential=cred,
+                          api_audience="api://registry") as reg:
+    # advertise this agent so other teams can find it
+    await reg.register_agent(name="Ops Copilot", endpoint=my_url, protocol="azure_functions")
+
+    # discover approved MCP servers and get ready-to-use tools
+    tools = await reg.build_mcp_tools(tag="operations")
+
+agent = AzureOpenAIChatClient().create_agent(name="Ops", instructions="...", tools=tools)</code></pre>
+          </div>
+
+          <h2>4 · Browse it in the UI</h2>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">run it locally</span></div>
+            <pre class="terminal__body"><span class="l-rule"># API</span>
+cd agent-registry
+pip install -e ".[dev]"
+uvicorn app.main:app --reload        <span class="l-comment"># http://localhost:8000/docs</span>
+
+<span class="l-rule"># UI</span>
+cd ui &amp;&amp; npm install &amp;&amp; npm run dev <span class="l-comment"># http://localhost:5173</span>
+
+<span class="l-comment">Dev auth: send  Authorization: Bearer dev  (admin) or  Bearer dev Registry.Read</span></pre>
+          </div>
+
+          <h2>Deploy to Azure</h2>
+          <p>The registry ships with Bicep + <code>azd</code>: one command provisions Azure Container Apps, a
+          serverless Cosmos DB account (<code>disableLocalAuth=true</code>), a user-assigned managed identity
+          with Cosmos data-plane RBAC, ACR, and Log Analytics.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">deploy</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-bash">cd agent-registry
+azd up    # provisions Container Apps + Cosmos + managed identity + ACR + Log Analytics</code></pre>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Why this matters</div>
+              <div class="callout__body">A registry turns scattered agents into a governed platform: capabilities are
+              authenticated, authorized by scope, scoped per tenant, and discoverable. It is the connective tissue
+              between the apps you build in <a href="project-ops-copilot.html">Ops Copilot</a> and
+              <a href="project-commerce-concierge.html">Commerce Concierge</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

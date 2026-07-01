@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deployment · Agent Framework Bootcamp</title>
+  <meta name="description" content="Take an agent to production — compare A2A, OpenAI-compatible endpoints, AG-UI, and the Azure Functions Durable Extension, then host the Atlas support agent on Azure Functions and invoke it over HTTP." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 17 min</span>
+          </div>
+          <h1>Deployment</h1>
+          <p class="doc-lead">
+            A great agent on your laptop helps no one. Production means a hosted endpoint, scaling, durability,
+            and an invocation contract clients can rely on. Agent Framework gives you several hosting surfaces —
+            and for serverless, stateful agents, the <strong>Azure Functions Durable Extension</strong> is the
+            sweet spot. You'll deploy the <strong>Atlas support agent</strong> to Azure Functions and call it
+            over HTTP.
+          </p>
+
+          <h2>Pick a hosting surface</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Atlas: from agent object to hosted endpoint</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TD
+    AG{{"🤖 Atlas Agent"}} --> H1["🔌 OpenAI-compatible API"]
+    AG --> H2["🌐 A2A server"]
+    AG --> H3["🖥️ AG-UI (web chat)"]
+    AG --> H4["⚡ Azure Functions (Durable)"]
+    H4 --> EP[["POST /api/agents/Atlas/run"]]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class AG,H4 hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Same agent, four front doors. Choose by client: SDK compatibility, cross-org federation, an embedded UI, or serverless scale.</div>
+          </div>
+
+          <h2>Hosting options at a glance</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Option</th><th>Best for</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td>OpenAI-compatible endpoint</td><td>Drop-in for existing OpenAI clients</td><td>Reuse SDKs &amp; tooling</td></tr>
+                <tr><td><a href="agent-to-agent.html">A2A protocol</a></td><td>Cross-team / cross-org agents</td><td>Discoverable agent card</td></tr>
+                <tr><td>AG-UI</td><td>Embedded web chat experiences</td><td>Front-end ready</td></tr>
+                <tr><td><strong>Azure Functions (Durable)</strong></td><td>Serverless, long-running, stateful</td><td>Scales to zero; survives restarts</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>1 · Register the agent with a Function App</h2>
+          <p>
+            Install the Azure Functions extra and wrap your agent in <code>AgentFunctionApp</code>. It generates
+            the HTTP trigger and wires in the Durable Extension so long-running runs survive process recycling.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">function_app.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python"># pip install agent-framework-azurefunctions --pre
+from agent_framework.azure import AgentFunctionApp
+from agent_framework.foundry import FoundryChatClient
+
+agent = FoundryChatClient().create_agent(
+    name="Atlas",
+    instructions="You are Atlas, a customer support agent. Be concise and helpful.",
+)
+
+# Exposes POST /api/agents/Atlas/run, backed by the Durable Extension.
+app = AgentFunctionApp(agents=[agent])</code></pre>
+          </div>
+
+          <h2>2 · Run it locally</h2>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">func start</span></div>
+            <pre class="terminal__body"><span class="l-rule">func start</span>
+<span class="l-comment">Azure Functions Core Tools</span>
+<span class="l-agent">Functions:
+  Atlas_run: [POST] http://localhost:7071/api/agents/Atlas/run</span>
+<span class="l-comment">Host running on http://localhost:7071</span></pre>
+          </div>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">invoke</span></div>
+            <pre class="terminal__body"><span class="l-rule">curl -X POST http://localhost:7071/api/agents/Atlas/run \
+  -H "Content-Type: application/json" \
+  -d '{"input": "How do I reset my password?"}'</span>
+<span class="l-agent">{ "output": "To reset your password, open Settings → Security →
+  Reset password, then follow the emailed link. Anything else?" }</span></pre>
+          </div>
+
+          <h2>3 · Ship to Azure</h2>
+          <p>
+            Deploy with the Azure Functions tooling (or <code>azd</code>). The same endpoint runs in the cloud,
+            scales on demand, and — because it's the Durable Extension — can pause for
+            <a href="human-in-the-loop.html">approvals</a> or long tool calls without holding a process open.
+          </p>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">deploy</span></div>
+            <pre class="terminal__body"><span class="l-rule">func azure functionapp publish atlas-support-prod</span>
+<span class="l-agent">Deployment successful.
+  Atlas_run: https://atlas-support-prod.azurewebsites.net/api/agents/Atlas/run</span></pre>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Wire observability before you scale</div>
+              <div class="callout__body">Add <code>configure_azure_monitor()</code> from <a href="observability.html">Observability</a> to your Function App's startup so every production run emits traces and token metrics to Application Insights from day one.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">Use managed identity, not keys</div>
+              <div class="callout__body">In production, authenticate the Function App to your model with a <code>ManagedIdentityCredential</code> rather than embedding API keys. It removes secret rotation and avoids the credential-probing pitfalls of <code>DefaultAzureCredential</code> at scale.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Durable = resilient by default</div>
+              <div class="callout__body">The Durable Extension checkpoints workflow state, so a multi-step agent run resumes exactly where it left off after a deploy, crash, or scale event — the production backbone for the system you'll assemble in the <a href="capstone-project.html">Capstone</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

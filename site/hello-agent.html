@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hello Agent · Agent Framework Bootcamp</title>
+  <meta name="description" content="Build the Contoso Financial Expense Policy Assistant — your first agent: a chat client, a system prompt that encodes policy, and a single run() call." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Get Started</span>
+            <span class="badge badge--beginner">Beginner</span>
+            <span>⏱️ 12 min</span>
+          </div>
+          <h1>Hello Agent</h1>
+          <p class="doc-lead">
+            Build the <strong>Contoso Financial Expense Policy Assistant</strong> — your first
+            real agent. It answers employee expense questions from a system prompt that encodes
+            actual policy, using one chat client and a single <code>run()</code> call.
+          </p>
+
+          <h2>From client to answer</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">From client to answer</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+sequenceDiagram
+    participant U as Employee
+    participant A as Agent
+    participant C as AzureOpenAIChatClient
+    participant M as Model
+    U->>A: "Dinner with a client, $90/person — reimbursable?"
+    A->>C: instructions + question
+    C->>M: chat completion
+    M-->>C: policy-grounded answer
+    C-->>A: response
+    A-->>U: response.text
+              </pre>
+            </div>
+            <div class="diagram__caption">One agent, one client, one model call — grounded by instructions.</div>
+          </div>
+
+          <h2>Step 1 — Build the chat client</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">build the client</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import os
+from agent_framework.azure import AzureOpenAIChatClient
+
+client = AzureOpenAIChatClient(
+    endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    api_key=os.environ["AZURE_OPENAI_API_KEY"],
+    deployment_name=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"],
+)</code></pre>
+          </div>
+
+          <h2>Step 2 — Encode the policy as instructions</h2>
+          <p>The system prompt is the agent's contract. Contoso's expense rules go here, in plain language.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">system prompt</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">SYSTEM_PROMPT = """
+You are Contoso Financial's Expense Policy Assistant. Answer employee questions
+using these rules:
+
+- Meals: up to $75/person domestic, $120/person international.
+- Entertainment: requires pre-approval; cap $200/person.
+- Airfare: economy only for flights under 6 hours.
+- All claims must be submitted within 30 days of the expense.
+
+Be concise. State whether a claim is reimbursable, the relevant limit, and any
+condition (e.g. pre-approval). If a request exceeds policy, say so plainly.
+"""</code></pre>
+          </div>
+
+          <h2>Step 3 — Create the agent and run it</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">modules/02_hello_agent/main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+
+
+async def main() -> None:
+    agent = client.create_agent(name="ExpenseAssistant", instructions=SYSTEM_PROMPT)
+
+    question = (
+        "I took a client to dinner in Seattle. The bill was $90 per person for "
+        "two people. Is that reimbursable?"
+    )
+    response = await agent.run(question)
+    print("Agent:", response.text)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <h2>Run it</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">bash</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-bash">cd modules/02_hello_agent
+python main.py</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py</span></div>
+            <pre class="terminal__body"><span class="l-agent">Agent: A $90/person client dinner in Seattle is over the $75/person domestic
+meal limit, so it isn't fully reimbursable as a standard meal. You can claim up
+to $75/person; the $15/person above the cap would need separate entertainment
+pre-approval (capped at $200/person). Submit within 30 days of the dinner.</span></pre>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Instructions are a contract</div>
+              <div class="callout__body">The system prompt is where your policy lives. Treat it like code: version it, review it, and test edge cases. A vague prompt produces vague — and non-compliant — answers.</div>
+            </div>
+          </div>
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Reuse the client</div>
+              <div class="callout__body">Create the <code>AzureOpenAIChatClient</code> once and reuse it across agents and requests. Don't construct a new client per call.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

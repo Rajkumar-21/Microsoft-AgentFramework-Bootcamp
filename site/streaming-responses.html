@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Streaming Responses · Agent Framework Bootcamp</title>
+  <meta name="description" content="Stream agent output token-by-token with run_stream — build the Helios SRE live postmortem writer, measure time-to-first-token, and keep thread memory while streaming." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Core Foundations</span>
+            <span class="badge badge--beginner">Beginner</span>
+            <span>⏱️ 14 min</span>
+          </div>
+          <h1>Streaming Responses</h1>
+          <p class="doc-lead">
+            For long answers, waiting for the whole response feels slow even when it isn't.
+            <strong>Streaming</strong> renders text as it's generated. You'll build the
+            <strong>Helios SRE Live Postmortem Writer</strong> — it streams a structured incident
+            report and measures <strong>time-to-first-token (TTFT)</strong>, the metric that drives
+            perceived latency.
+          </p>
+
+          <h2>Streaming vs. buffered</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">run() vs. run_stream()</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    subgraph Buffered["await agent.run()"]
+      B1[send] --> B2[...wait for full answer...] --> B3[render once]
+    end
+    subgraph Streaming["async for update in agent.run_stream()"]
+      S1[send] --> S2[chunk] --> S3[chunk] --> S4[chunk] --> S5[render live]
+    end
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class Streaming hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">run() returns once, fully formed. run_stream() yields incremental chunks as the model produces them.</div>
+          </div>
+
+          <h2>Iterate the stream</h2>
+          <p><code>run_stream(...)</code> is an <strong>async generator</strong>. Iterate it with <code>async for</code>; each <code>update.text</code> is an incremental piece.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">stream chunks</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">print("Agent: ", end="", flush=True)
+async for update in agent.run_stream(prompt, thread=thread):
+    if update.text:
+        print(update.text, end="", flush=True)</code></pre>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">flush=True matters</div>
+              <div class="callout__body">Terminals line-buffer by default, which defeats streaming. <code>print(..., end="", flush=True)</code> forces each chunk to the screen the moment it arrives.</div>
+            </div>
+          </div>
+
+          <h2>Measure time-to-first-token</h2>
+          <p>TTFT — how long until the <em>first</em> visible character — is what users perceive as "responsiveness". Capture it by timing the first non-empty chunk.</p>
+          <ol class="steps">
+            <li>Start a timer before the loop.</li>
+            <li>On the first chunk with text, record <code>perf_counter() - started</code>.</li>
+            <li>Keep accumulating chunks for the full text and final metrics.</li>
+          </ol>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">measure TTFT</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import time
+
+started = time.perf_counter()
+ttft = None
+chunks = []
+async for update in agent.run_stream(prompt, thread=thread):
+    if update.text:
+        if ttft is None:
+            ttft = time.perf_counter() - started
+        chunks.append(update.text)
+        print(update.text, end="", flush=True)
+full = "".join(chunks)
+print(f"\n[streamed {len(full)} chars · TTFT {ttft * 1000:.0f} ms]")</code></pre>
+          </div>
+
+          <h2>Run it</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">bash</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-bash">cd modules/06_streaming_responses
+python main.py</code></pre>
+          </div>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — streaming postmortem</span></div>
+            <pre class="terminal__body"><span class="l-rule">================================================================
+  Streaming postmortem for INC-4821
+================================================================</span>
+<span class="l-agent">Agent: # Postmortem — INC-4821
+
+## Summary
+A deploy to the checkout service exhausted the database connection pool,
+returning HTTP 503s for 23 minutes until a rollback restored service.
+
+## Impact
+~8% of checkout traffic failed during the window. No data loss.
+
+## Timeline
+- 14:02  Deploy v3.7.1 begins
+- 14:05  503 rate climbs; connection pool saturated
+- 14:21  Rollback to v3.7.0 initiated
+- 14:25  Error rate returns to baseline
+
+## Root Cause
+v3.7.1 raised per-pod concurrency without raising the DB pool ceiling,
+so connections were exhausted under normal load.
+
+## Resolution
+Rolled back to v3.7.0; service recovered immediately.
+
+## Action Items
+1. Cap per-pod concurrency to pool size (owner: platform)
+2. Add a pool-saturation alert at 80% (owner: SRE)
+3. Add a pre-deploy capacity check (owner: release eng)</span>
+
+<span class="l-comment">[streamed 742 chars · time-to-first-token 480 ms]</span></pre>
+          </div>
+
+          <h2>Streaming keeps thread memory</h2>
+          <p>Because we pass the same <code>thread</code>, a follow-up turn streams <em>and</em> remembers the postmortem — so it can extract just the action items:</p>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">follow-up on the same thread</span></div>
+            <pre class="terminal__body"><span class="l-rule">================================================================
+  Follow-up (same thread): extract just the action items
+================================================================</span>
+<span class="l-agent">Agent: 1. ☐ Cap per-pod concurrency to pool size — platform
+2. ☐ Add pool-saturation alert at 80% — SRE
+3. ☐ Add pre-deploy capacity check — release eng</span></pre>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Streaming is a UX and a cost lever</div>
+              <div class="callout__body">Beyond feel, streaming lets you render partial results, cancel early if the answer goes off-track, and surface progress in long agentic runs. Pair it with thread memory and you get responsive, stateful experiences — the foundation for the chat and workflow UIs you'll build later.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--success">
+            <div class="callout__icon">✅</div>
+            <div>
+              <div class="callout__title">You've completed the Core Foundations</div>
+              <div class="callout__body">You can now construct clients across providers, ground agents in instructions, give them tools, keep multi-turn memory, and stream responses. Next comes structured outputs and the tools &amp; workflows track — where agents start coordinating with each other.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ops Copilot · Agent Framework Bootcamp</title>
+  <meta name="description" content="A deployable incident-response agent that combines MCP tools, middleware, a Magentic supervisor, human-in-the-loop approvals, memory, and observability — and discovers tools from the Agent Registry." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Real-World Projects</span>
+            <span class="badge badge--advanced">Deployable</span>
+            <span>⏱️ 25 min</span>
+          </div>
+          <h1>Ops Copilot</h1>
+          <p class="doc-lead">
+            <strong>Ops Copilot</strong> is an incident-response agent for SRE / operations teams — one
+            deployable Azure Functions service that combines many lessons: <strong>function tools</strong>,
+            <strong>MCP tools</strong> discovered from the registry, <strong>middleware</strong> for audit and
+            PII redaction, a <strong>Magentic supervisor</strong>, <strong>human-in-the-loop</strong> approvals,
+            <strong>memory</strong>, and <strong>observability</strong>.
+          </p>
+
+          <div class="callout callout--info">
+            <div class="callout__icon">📁</div>
+            <div>
+              <div class="callout__title">Where it lives</div>
+              <div class="callout__body">Source: <code>projects/ops-copilot/</code>. It connects to the
+              <a href="agent-registry.html">Agent Registry</a> to discover MCP servers and to self-register.</div>
+            </div>
+          </div>
+
+          <h2>What it combines</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Capability</th><th>From</th><th>Role</th></tr></thead>
+              <tbody>
+                <tr><td>Function tools</td><td><a href="function-tools.html">Lesson 04</a></td><td>Read metrics, look up runbooks</td></tr>
+                <tr><td>MCP tools</td><td><a href="mcp-tools.html">Lesson 09</a></td><td>Paging / ticketing (from the registry)</td></tr>
+                <tr><td>Middleware</td><td><a href="middleware-system.html">Lesson 10</a></td><td>Audit logging + PII redaction</td></tr>
+                <tr><td>Supervisor</td><td><a href="supervisor-agent.html">Lesson 15</a></td><td>Orchestrates triage → mitigation → comms</td></tr>
+                <tr><td>Human-in-the-loop</td><td><a href="human-in-the-loop.html">Lesson 17</a></td><td>Approval gate before production actions</td></tr>
+                <tr><td>Memory</td><td><a href="memory-persistence.html">Lesson 18</a></td><td>Incident timeline across turns</td></tr>
+                <tr><td>Observability</td><td><a href="observability.html">Lesson 19</a></td><td>OpenTelemetry → Azure Monitor</td></tr>
+                <tr><td>Deployment</td><td><a href="deployment.html">Lesson 22</a></td><td><code>AgentFunctionApp</code> on Azure Functions</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>How a request flows</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Ops Copilot — incident response</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TB
+    A["🚨 Incident alert"] --> M{{"🧭 Magentic manager"}}
+    M --> T["🔎 Triage<br/>metrics + runbooks"]
+    M --> Mi["🛠️ Mitigation<br/>MCP tools + HITL"]
+    M --> C["📣 Comms<br/>status update"]
+    Mi -. "approval" .-> H["⏸️ Operator"]
+    M -. "discover MCP" .-> R[("📚 Agent Registry")]
+    M -. "traces" .-> O[("📡 Azure Monitor")]
+
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class M,Mi,H hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">An alert is planned by the supervisor, which coordinates triage, mitigation (gated by human approval), and comms — pulling MCP tools from the registry and emitting traces to Azure Monitor.</div>
+          </div>
+
+          <h2>1 · Tools, with a human gate on risky actions</h2>
+          <p>Read-only tools run freely; the production action is marked
+          <code>approval_mode="always_require"</code>, so the framework pauses for a human before it executes.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">app/tools.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from typing import Annotated
+from pydantic import Field
+from agent_framework import tool
+
+@tool
+def get_metric(host: Annotated[str, Field(description="Host or service.")],
+               metric: Annotated[str, Field(description="Metric, e.g. cpu.")]) -> str:
+    """Return the latest value for a host metric."""
+    ...
+
+@tool(approval_mode="always_require")
+def restart_service(host: Annotated[str, Field(description="Host to restart.")],
+                    service: Annotated[str, Field(description="Service name.")]) -> str:
+    """Restart a production service. Requires human approval before running."""
+    return f"Service '{service}' on '{host}' was restarted."</code></pre>
+          </div>
+
+          <h2>2 · Specialists with audit middleware + registry MCP tools</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">app/agents.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework import ChatMessageStore
+from agent_framework.azure import AzureOpenAIChatClient
+from .middleware import audit_middleware       # audit + PII redaction (Lesson 10)
+from .registry import discover_mcp_tools        # pull approved MCP servers
+from .tools import get_metric, lookup_runbook, restart_service
+
+client = AzureOpenAIChatClient()
+mcp_tools = await discover_mcp_tools(tag="operations")
+
+mitigation = client.create_agent(
+    name="Mitigation",
+    instructions="Propose then, after approval, execute the least disruptive fix.",
+    tools=[restart_service, *mcp_tools],
+    middleware=[audit_middleware],
+    chat_message_store_factory=ChatMessageStore,   # remember the timeline (Lesson 18)
+)</code></pre>
+          </div>
+
+          <h2>3 · A Magentic supervisor ties them together</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">app/workflow.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework import MagenticBuilder
+
+workflow = (
+    MagenticBuilder()
+    .participants(triage=triage, mitigation=mitigation, comms=comms)
+    .with_standard_manager(chat_client=client, max_round_count=12,
+                           max_stall_count=3, max_reset_count=1)
+    .build()
+)</code></pre>
+          </div>
+
+          <h2>4 · Deploy as one durable endpoint</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">function_app.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework.azure import AgentFunctionApp
+from .workflow import build_incident_workflow
+
+ops_copilot = build_incident_workflow().as_agent(name="OpsCopilot")
+app = AgentFunctionApp(agents=[ops_copilot])
+# POST /api/agents/OpsCopilot/run</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">run &amp; deploy</span></div>
+            <pre class="terminal__body"><span class="l-rule"># try it locally (pauses for [y/N] on the restart action)</span>
+cd projects/ops-copilot &amp;&amp; pip install -e .
+python -m app.run "CPU on web-prod-3 is at 98% for 10 minutes"
+
+<span class="l-rule"># deploy</span>
+pip install agent-framework-azurefunctions --pre
+func azure functionapp publish ops-copilot-prod</pre>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Production notes</div>
+              <div class="callout__body">Use managed identity for Azure OpenAI and the registry (no keys), set
+              <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> so traces flow to Azure Monitor, and keep the
+              approval gate on every irreversible tool. Compare with the customer-facing
+              <a href="project-commerce-concierge.html">Commerce Concierge</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

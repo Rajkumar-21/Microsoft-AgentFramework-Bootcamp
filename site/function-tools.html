@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Function Tools · Agent Framework Bootcamp</title>
+  <meta name="description" content="Give agents real capabilities — the Lakeside Outfitters Order Operations Agent looks up orders, checks stock, estimates delivery, and issues refunds via typed Python functions." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Core Foundations</span>
+            <span class="badge badge--beginner">Beginner</span>
+            <span>⏱️ 16 min</span>
+          </div>
+          <h1>Function Tools</h1>
+          <p class="doc-lead">
+            An agent that can only talk is a chatbot. An agent that can <strong>act</strong> is a
+            tool. You'll build the <strong>Lakeside Outfitters Order Operations Agent</strong> —
+            it resolves real requests by calling typed Python functions the model invokes on demand.
+          </p>
+
+          <h2>How tool calling works</h2>
+          <p>
+            You don't call the tools — the <em>model</em> does. You describe each function with
+            type hints and a docstring; the framework advertises them to the model, which decides
+            which to call, with what arguments, and when to chain several.
+          </p>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">The tool-calling loop</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant A as Agent
+    participant M as Model
+    participant T as Your Python tools
+    U->>A: "Status of LO-10231 and when will it arrive?"
+    A->>M: message + tool schemas
+    M-->>A: call lookup_order_status("LO-10231")
+    A->>T: execute
+    T-->>A: "packed, 1x TENT-4P"
+    M-->>A: call estimate_delivery("LO-10231")
+    A->>T: execute
+    T-->>A: "arrives ~3 days"
+    M-->>A: final natural-language answer
+    A-->>U: response.text
+              </pre>
+            </div>
+            <div class="diagram__caption">The model plans, the framework executes your Python, results feed back into the answer.</div>
+          </div>
+
+          <h2>Define tools as plain functions</h2>
+          <p>A tool is just a Python function. Three things make it model-ready:</p>
+          <ol class="steps">
+            <li><strong>Type hints</strong> on every parameter and the return value.</li>
+            <li><strong><code>Annotated[type, Field(description=...)]</code></strong> to describe each argument — the model reads these to fill in arguments correctly.</li>
+            <li><strong>A docstring</strong> — it becomes the tool's description, telling the model <em>when</em> to use it.</li>
+          </ol>
+
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">tools.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from typing import Annotated
+from datetime import date, timedelta
+from pydantic import Field
+
+_ORDERS = {
+    "LO-10231": {"status": "packed", "sku": "TENT-4P", "qty": 1, "region": "WA"},
+    "LO-10477": {"status": "shipped", "sku": "BAG-65L", "qty": 2, "region": "NY"},
+}
+_TRANSIT_DAYS = {"WA": 2, "NY": 4, "TX": 3}
+
+
+def lookup_order_status(
+    order_id: Annotated[str, Field(description="Order ID, e.g. 'LO-10231'")],
+) -> str:
+    """Return the current fulfillment status of an order."""
+    order = _ORDERS.get(order_id.upper())
+    if not order:
+        return f"No order found with ID {order_id}."
+    return f"Order {order_id.upper()} is '{order['status']}' ({order['qty']}x {order['sku']})."
+
+
+def estimate_delivery(
+    order_id: Annotated[str, Field(description="Order ID to estimate delivery for")],
+) -> str:
+    """Estimate the delivery date for an order based on its destination region."""
+    order = _ORDERS.get(order_id.upper())
+    if not order:
+        return f"No order found with ID {order_id}."
+    days = _TRANSIT_DAYS.get(order["region"], 5)
+    eta = date.today() + timedelta(days=days)
+    return f"Order {order_id.upper()} should arrive around {eta.isoformat()} ({days} days)."</code></pre>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Tools are your trust boundary</div>
+              <div class="callout__body">The model can <em>request</em> a refund, but your function decides whether to grant it. Put validation, authorization, and audit logging <strong>inside</strong> the tool — never trust the model to enforce business rules. A tool is where "the AI" meets "your policy."</div>
+            </div>
+          </div>
+
+          <h2>Register tools with the agent</h2>
+          <p>Pass the functions in a list to <code>create_agent</code>. No decorators, no manual schema.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">create the agent</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">agent = client.create_agent(
+    name="OrderOpsAgent",
+    instructions=(
+        "You are Lakeside Outfitters' order operations assistant. "
+        "Use the available tools to answer questions about orders, stock, "
+        "delivery dates, and refunds. Be concise and confirm actions you take."
+    ),
+    tools=[lookup_order_status, check_inventory, estimate_delivery, initiate_refund],
+)</code></pre>
+          </div>
+
+          <h2>Run it</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">bash</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-bash">cd modules/04_function_tools
+python main.py</code></pre>
+          </div>
+          <p>Watch the agent <strong>chain two tools</strong> in the first turn — status <em>and</em> delivery — from a single question:</p>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py</span></div>
+            <pre class="terminal__body"><span class="l-user">User:  What's the status of order LO-10231 and when will it arrive?</span>
+<span class="l-agent">Agent: Order LO-10231 is packed (1x TENT-4P) and should arrive around
+2025-01-18, about 2 days out.</span>
+
+<span class="l-user">User:  Is BAG-65L in stock? Order LO-10477 has 2 of them.</span>
+<span class="l-agent">Agent: BAG-65L is currently out of stock. Order LO-10477 already shipped its
+2 units, so it's unaffected — but new orders for that SKU can't be fulfilled
+until it's restocked.</span>
+
+<span class="l-user">User:  Refund order LO-10588 — the customer changed their mind.</span>
+<span class="l-agent">Agent: Done — refund RF-10588 has been initiated for order LO-10588
+(reason: customer changed their mind).</span></pre>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Keep tools small and single-purpose</div>
+              <div class="callout__body">Four focused tools beat one mega-tool with a <code>mode</code> flag. Small tools are easier for the model to choose correctly, easier to test, and easier to authorize independently.</div>
+            </div>
+          </div>
+
+          <h2>Design checklist</h2>
+          <ol class="steps">
+            <li><strong>One responsibility per tool</strong> — <code>initiate_refund</code>, not <code>manage_order</code>.</li>
+            <li><strong>Describe every argument</strong> with <code>Field(description=...)</code>.</li>
+            <li><strong>Return strings the model can reason over</strong> — include IDs and outcomes.</li>
+            <li><strong>Validate inside the function</strong> — never assume the model passed safe input.</li>
+            <li><strong>Make side-effects auditable</strong> — log who/what/when for refunds and writes.</li>
+          </ol>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

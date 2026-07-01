@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Concurrent Workflows · Agent Framework Bootcamp</title>
+  <meta name="description" content="Fan out to independent specialists in parallel and merge their results with ConcurrentBuilder — build the Lumen market brief where three analysts work simultaneously and an aggregator synthesizes." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Tools &amp; Workflows</span>
+            <span class="badge badge--intermediate">Intermediate</span>
+            <span>⏱️ 15 min</span>
+          </div>
+          <h1>Concurrent Workflows</h1>
+          <p class="doc-lead">
+            When subtasks are <em>independent</em>, running them one after another just wastes wall-clock
+            time. A <strong>concurrent workflow</strong> fans out to multiple agents in parallel, then merges
+            their results. You'll build the <strong>Lumen market brief</strong>: three analysts — fundamentals,
+            technicals, and sentiment — work at the same time, and an aggregator synthesizes one brief.
+          </p>
+
+          <h2>Fan-out, fan-in</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Lumen: parallel analysts → aggregator</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    Q["Analyze: ACME Corp"] --> F["📊 Fundamentals"]
+    Q --> T["📈 Technicals"]
+    Q --> S["🗞️ Sentiment"]
+    F --> AGG{{"🧩 Aggregator"}}
+    T --> AGG
+    S --> AGG
+    AGG --> OUT[["Unified market brief"]]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class F,T,S,AGG hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">All three analysts run simultaneously; the aggregator waits for all of them, then composes the final answer.</div>
+          </div>
+
+          <h2>1 · Build the parallel analysts</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from agent_framework import ConcurrentBuilder
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+async def main() -> None:
+    client = AzureOpenAIChatClient()
+
+    fundamentals = client.create_agent(
+        name="Fundamentals",
+        instructions="Assess revenue, margins, and valuation. 4 bullet points.",
+    )
+    technicals = client.create_agent(
+        name="Technicals",
+        instructions="Assess price trend, support/resistance, momentum. 4 bullets.",
+    )
+    sentiment = client.create_agent(
+        name="Sentiment",
+        instructions="Summarize recent news and analyst tone. 4 bullet points.",
+    )</code></pre>
+          </div>
+
+          <h2>2 · Fan out with <code>ConcurrentBuilder</code></h2>
+          <p>
+            Pass the participants — they run in parallel. The default aggregator concatenates their outputs;
+            supply your own with <code>.with_aggregator(fn)</code> to synthesize instead of stack.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py (cont.)</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">    async def synthesize(results: list[str]) -> str:
+        joined = "\n\n".join(results)
+        writer = client.create_agent(
+            name="Brief-Writer",
+            instructions="Merge the analyst notes into one tight market brief.",
+        )
+        resp = await writer.run(f"Analyst notes:\n{joined}")
+        return resp.text
+
+    workflow = (
+        ConcurrentBuilder(participants=[fundamentals, technicals, sentiment])
+        .with_aggregator(synthesize)
+        .build()
+    )
+
+    result = await workflow.run("Analyze ACME Corp for a swing-trade horizon.")
+    for output in result.get_outputs():
+        print(output)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — lumen brief</span></div>
+            <pre class="terminal__body"><span class="l-comment">[fan-out] Fundamentals · Technicals · Sentiment running in parallel...</span>
+<span class="l-comment">[fan-in] all 3 complete → aggregator</span>
+<span class="l-agent">ACME Corp — Swing-Trade Brief
+
+Fundamentals are solid: 18% YoY revenue growth and expanding margins, though
+the valuation is rich at 32x forward earnings. Technically the stock is in an
+uptrend above its 50-day moving average with firm support at $142. Sentiment
+is constructive — three analyst upgrades this week — but watch next Thursday's
+earnings as a near-term catalyst.
+
+Net: constructive with a defined risk level at $142.</span></pre>
+          </div>
+
+          <h2>Why parallel matters</h2>
+          <ol class="steps">
+            <li><strong>Latency</strong> — three 4-second analysts finish in ~4s parallel vs. ~12s sequential.</li>
+            <li><strong>Independence</strong> — sentiment doesn't need fundamentals' output, so don't make it wait.</li>
+            <li><strong>Diverse perspectives</strong> — the aggregator gets genuinely independent takes, not a chain where later agents anchor on earlier ones.</li>
+          </ol>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Default vs. custom aggregator</div>
+              <div class="callout__body">Skip <code>.with_aggregator(...)</code> and you get all outputs concatenated — perfect when you want every analyst's raw view. Add an aggregator agent when you need one synthesized answer.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Map-reduce for agents</div>
+              <div class="callout__body">Concurrent workflows are the agent version of scatter-gather: classify a document against ten policies at once, score a candidate on five rubrics, or poll multiple data sources in parallel. You've now seen all three core shapes — <a href="workflows-sequential.html">sequential</a>, <a href="workflows-handoff.html">handoff</a>, and concurrent — the building blocks for the multi-agent systems in the <a href="patterns-overview.html">architecture track</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

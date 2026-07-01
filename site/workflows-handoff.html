@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Handoff Workflows · Agent Framework Bootcamp</title>
+  <meta name="description" content="Route a conversation to the right specialist with HandoffBuilder — build the Harbor support desk where a triage agent hands off to billing, technical, or refunds, then back again." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Tools &amp; Workflows</span>
+            <span class="badge badge--intermediate">Intermediate</span>
+            <span>⏱️ 16 min</span>
+          </div>
+          <h1>Handoff Workflows</h1>
+          <p class="doc-lead">
+            Some problems don't flow in a straight line — they need <em>routing</em>. A
+            <strong>handoff workflow</strong> lets a triage agent pass the conversation to the right
+            specialist, who can hand it back or onward. You'll build the <strong>Harbor support desk</strong>:
+            triage reads the ticket and delegates to <strong>Billing</strong>, <strong>Technical</strong>, or
+            <strong>Refunds</strong>.
+          </p>
+
+          <h2>The routing mesh</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Harbor: triage delegates to specialists</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TD
+    U([Customer message]) --> T{{"🧭 Triage"}}
+    T -->|billing question| B["💳 Billing"]
+    T -->|bug / error| X["🛠️ Technical"]
+    T -->|wants money back| R["💸 Refunds"]
+    B -.handback.-> T
+    X -.handback.-> T
+    R -.handback.-> T
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class T hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Triage decides; specialists own their domain and can return control when the issue falls outside it.</div>
+          </div>
+
+          <h2>1 · Build triage and specialists</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from agent_framework import HandoffBuilder
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+async def main() -> None:
+    client = AzureOpenAIChatClient()
+
+    triage = client.create_agent(
+        name="Triage",
+        instructions=(
+            "You are the front desk for Harbor support. Read the customer's "
+            "message and hand off to the right specialist. Don't try to solve "
+            "it yourself."
+        ),
+    )
+    billing = client.create_agent(
+        name="Billing",
+        instructions="You resolve invoice, subscription, and payment questions.",
+    )
+    technical = client.create_agent(
+        name="Technical",
+        instructions="You debug product errors and outages. Be precise.",
+    )
+    refunds = client.create_agent(
+        name="Refunds",
+        instructions="You process refund requests and explain the policy.",
+    )</code></pre>
+          </div>
+
+          <h2>2 · Define the handoffs</h2>
+          <p>
+            Set the start agent, then declare who can hand off to whom. The builder injects handoff tools so
+            each agent can transfer control by name.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py (cont.)</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">    workflow = (
+        HandoffBuilder(
+            name="harbor-support",
+            participants=[triage, billing, technical, refunds],
+        )
+        .with_start_agent(triage)
+        .add_handoff(triage, [billing, technical, refunds])
+        .add_handoff(billing, triage)
+        .add_handoff(technical, triage)
+        .add_handoff(refunds, triage)
+        .build()
+    )
+
+    result = await workflow.run(
+        "I was charged twice for my October invoice — I want one charge refunded."
+    )
+    for output in result.get_outputs():
+        print(output)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — harbor support</span></div>
+            <pre class="terminal__body"><span class="l-comment">[Triage] double charge + refund request → handoff to Refunds</span>
+<span class="l-agent">[Refunds] I see a duplicate charge on your October invoice. I've queued a
+refund for the second charge of $49.00 — it'll appear in 3–5 business days.
+You'll get a confirmation email shortly. Anything else I can help with?</span></pre>
+          </div>
+
+          <h2>Interactive vs. autonomous</h2>
+          <ol class="steps">
+            <li><strong>Interactive</strong> — by default the workflow can pause and emit a <code>request_info</code> event to collect the user's next message, enabling true multi-turn support chats.</li>
+            <li><strong>Autonomous</strong> — provide the full context up front and let triage route once to a specialist that resolves it end-to-end, as above.</li>
+          </ol>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Handoff vs. sequential</div>
+              <div class="callout__body">Use <a href="workflows-sequential.html">sequential</a> when every item goes through the same steps. Use handoff when the <em>path depends on the content</em> — a billing ticket and a bug report shouldn't take the same route.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">This is how support orgs actually work</div>
+              <div class="callout__body">Tier-1 triage routing to specialized queues is the dominant model in customer operations. Handoff workflows encode that org chart in code — and because each specialist is its own agent, you can give Billing the payments tools and Technical the diagnostics tools without cross-contaminating their capabilities.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

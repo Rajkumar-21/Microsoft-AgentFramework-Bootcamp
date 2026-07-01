@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Middleware · Agent Framework Bootcamp</title>
+  <meta name="description" content="Intercept agent runs, tool calls, and model requests with agent, function, and chat middleware — build the Aegis compliance layer that audits, redacts PII, and gates sensitive tools." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Tools &amp; Workflows</span>
+            <span class="badge badge--intermediate">Intermediate</span>
+            <span>⏱️ 16 min</span>
+          </div>
+          <h1>Middleware</h1>
+          <p class="doc-lead">
+            Cross-cutting concerns — logging, security, redaction, caching — shouldn't live inside your agent
+            logic. <strong>Middleware</strong> wraps execution so you can inspect and modify inputs, outputs,
+            and control flow from the outside. You'll build the <strong>Aegis compliance layer</strong>: it
+            audits every run, redacts PII before it reaches the model, and blocks a sensitive tool unless a
+            condition is met.
+          </p>
+
+          <h2>Three interception points</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">The middleware pipeline</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    U[run input] --> A["Agent middleware<br/>wraps the whole run"]
+    A --> C["Chat middleware<br/>wraps each model call"]
+    C --> F["Function middleware<br/>wraps each tool call"]
+    F --> M[(LLM / tool)]
+    M --> F --> C --> A --> O[result]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class A,C,F hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Each layer calls <code>call_next()</code> to continue, and may short-circuit by setting <code>context.result</code> + <code>context.terminate</code>.</div>
+          </div>
+
+          <table class="spec-table">
+            <thead><tr><th>Type</th><th>Context</th><th>Wraps</th></tr></thead>
+            <tbody>
+              <tr><td>Agent</td><td><code>AgentRunContext</code></td><td>The entire <code>agent.run(...)</code></td></tr>
+              <tr><td>Function</td><td><code>FunctionInvocationContext</code></td><td>Each tool/function call</td></tr>
+              <tr><td>Chat</td><td><code>ChatContext</code></td><td>Each underlying model request</td></tr>
+            </tbody>
+          </table>
+
+          <h2>1 · Audit every run (agent middleware)</h2>
+          <p>
+            Function-based middleware is just an <code>async</code> function taking the context and a
+            <code>call_next</code> callback. Mutate the context, then <code>await call_next()</code>.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">audit_middleware.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import time
+from collections.abc import Awaitable, Callable
+from agent_framework import AgentRunContext
+
+
+async def audit_run(
+    context: AgentRunContext,
+    call_next: Callable[[], Awaitable[None]],
+) -> None:
+    """Log every agent run with timing — the Aegis audit trail."""
+    started = time.perf_counter()
+    print(f"[audit] run started")
+    await call_next()
+    elapsed = (time.perf_counter() - started) * 1000
+    print(f"[audit] run completed in {elapsed:.0f} ms")</code></pre>
+          </div>
+
+          <h2>2 · Redact PII (chat middleware)</h2>
+          <p>
+            Chat middleware sees the raw messages headed to the model. Here we scrub anything that looks like
+            a Social Security number before it ever leaves the process.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">redact_middleware.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import re
+from collections.abc import Awaitable, Callable
+from agent_framework import ChatContext
+
+SSN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+
+
+async def redact_pii(
+    context: ChatContext,
+    call_next: Callable[[], Awaitable[None]],
+) -> None:
+    """Mask SSNs in outbound messages before the model sees them."""
+    for message in context.messages:
+        if message.text:
+            message.text = SSN.sub("[REDACTED-SSN]", message.text)
+    await call_next()</code></pre>
+          </div>
+
+          <h2>3 · Gate a sensitive tool (function middleware)</h2>
+          <p>
+            Function middleware can <strong>block</strong> a call entirely. Set <code>context.result</code>
+            and <code>context.terminate = True</code> to short-circuit without running the tool.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">guard_middleware.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from collections.abc import Awaitable, Callable
+from agent_framework import FunctionMiddleware, FunctionInvocationContext
+
+
+class ApprovalGuard(FunctionMiddleware):
+    """Block issue_refund over $500 unless approved=True was supplied."""
+
+    async def process(
+        self,
+        context: FunctionInvocationContext,
+        call_next: Callable[[], Awaitable[None]],
+    ) -> None:
+        if context.function.name == "issue_refund":
+            amount = float(context.arguments.get("amount", 0))
+            if amount > 500 and not context.arguments.get("approved"):
+                context.result = "BLOCKED: refunds over $500 require approval."
+                context.terminate = True
+                print(f"[guard] blocked ${amount:.2f} refund — needs approval")
+                return
+        await call_next()</code></pre>
+          </div>
+
+          <h2>4 · Register the layers</h2>
+          <p>Pass middleware when creating the agent. Agent-level middleware wraps run-level middleware.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">agent = AzureOpenAIChatClient().create_agent(
+    name="Aegis-Support",
+    instructions="You are a support agent. Use issue_refund for refunds.",
+    tools=[issue_refund],
+    middleware=[audit_run, redact_pii, ApprovalGuard()],
+)
+
+resp = await agent.run("Refund order 8842 for $750, customer SSN 123-45-6789.")
+print(resp.text)</code></pre>
+          </div>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — aegis guardrails</span></div>
+            <pre class="terminal__body"><span class="l-comment">[audit] run started</span>
+<span class="l-comment">[guard] blocked $750.00 refund — needs approval</span>
+<span class="l-agent">I can't process a $750 refund without approval. The SSN you shared has been
+redacted from our records. Please resubmit with manager approval and I'll
+complete it right away.</span>
+<span class="l-comment">[audit] run completed in 612 ms</span></pre>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Function-based or class-based</div>
+              <div class="callout__body">Use a plain <code>async def</code> for stateless concerns (logging, redaction). Subclass <code>FunctionMiddleware</code>/<code>AgentMiddleware</code> when you need state — a cache, a counter, an injected client.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Middleware is where compliance lives</div>
+              <div class="callout__body">Auditing, PII handling, rate limiting, cost caps, and approval gates are policy — they belong in a reusable layer, not scattered through prompts. Build them once as middleware and apply them to every agent in your fleet. This is the production-hardening you'll formalize in <a href="patterns-overview.html">the architecture track</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

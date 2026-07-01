@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conversation Threads · Agent Framework Bootcamp</title>
+  <meta name="description" content="Give agents memory across turns with the thread primitive — build the Summit Bank mortgage pre-qualification advisor, then prove what happens without a thread." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Core Foundations</span>
+            <span class="badge badge--beginner">Beginner</span>
+            <span>⏱️ 14 min</span>
+          </div>
+          <h1>Conversation Threads</h1>
+          <p class="doc-lead">
+            Real conversations build on what came before. You'll build the
+            <strong>Summit Bank Mortgage Pre-Qualification Advisor</strong> — an agent that
+            interviews an applicant across several turns and remembers every detail — then run the
+            <em>same</em> questions without a thread to watch it forget everything.
+          </p>
+
+          <h2>What a thread is</h2>
+          <p>A thread is the conversation's memory. Create one, then pass it to every <code>run</code> call so each turn sees the full history.</p>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Threaded vs. stateless runs</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TD
+    subgraph Threaded["With thread = agent.get_new_thread()"]
+      T1[Turn 1: income $140k] --> T2[Turn 2: down payment $60k]
+      T2 --> T3[Turn 3: target $480k]
+      T3 --> T4[Turn 4: summarize + decide ✓ sees all]
+    end
+    subgraph Stateless["Without a thread"]
+      S1[Turn 1] -. forgotten .-> S4[Turn 4: knows nothing ✗]
+    end
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class T4 hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">With a shared thread, turn 4 can see turns 1–3. Without it, every turn starts blank.</div>
+          </div>
+
+          <h2>Create and use a thread</h2>
+          <p>The thread factory is <strong>synchronous</strong> — no <code>await</code>. The runs are async, and you pass <code>thread=thread</code> to each.</p>
+          <ol class="steps">
+            <li>Create the agent once.</li>
+            <li>Call <code>thread = agent.get_new_thread()</code> — synchronous, returns a fresh thread.</li>
+            <li>Pass <code>thread=thread</code> to every <code>await agent.run(...)</code> to carry context forward.</li>
+          </ol>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">threaded run</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">agent = client.create_agent(name="MortgageAdvisor", instructions=ADVISOR_INSTRUCTIONS)
+
+thread = agent.get_new_thread()  # sync — no await
+for message in TURNS:
+    response = await agent.run(message, thread=thread)
+    print(response.text)</code></pre>
+          </div>
+
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">get_new_thread() is sync — don't await it</div>
+              <div class="callout__body">A common first bug: <code>await agent.get_new_thread()</code>. The thread factory returns the thread directly. Only <code>run(...)</code> and <code>run_stream(...)</code> are awaitable.</div>
+            </div>
+          </div>
+
+          <h2>With memory — the agent connects the dots</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">bash</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-bash">cd modules/05_conversation_threads
+python main.py</code></pre>
+          </div>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">WITH a shared thread — the agent remembers</span></div>
+            <pre class="terminal__body"><span class="l-rule">================================================================
+  WITH a shared thread — the agent remembers
+================================================================</span>
+
+<span class="l-user">Applicant: Hi — my household income is $140,000 a year.</span>
+<span class="l-agent">Advisor:   Great, thanks. Noted: household income $140,000/yr. What have you
+saved for a down payment?</span>
+
+<span class="l-user">Applicant: We've saved $60,000 for a down payment.</span>
+<span class="l-agent">Advisor:   Got it — $60,000 down. And what price range are you considering?</span>
+
+<span class="l-user">Applicant: We're looking at homes around $480,000.</span>
+<span class="l-agent">Advisor:   Understood: target ~$480,000.</span>
+
+<span class="l-user">Applicant: Based on everything I told you, do we pre-qualify? Summarize first.</span>
+<span class="l-agent">Advisor:   Summary — income $140k/yr, down payment $60k, target $480k.
+With $60k down you'd finance ~$420k. Using a 28% front-end guideline your
+monthly housing budget is ~$3,270; a $420k loan is within reach at typical
+rates, so this looks like a solid pre-qualification. Final approval depends on
+credit, debts, and rate.</span></pre>
+          </div>
+
+          <h2>Without memory — the agent starts over every turn</h2>
+          <p>Drop the <code>thread=</code> argument and each call is isolated. The final "summarize" request has nothing to summarize:</p>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">WITHOUT a thread — each turn is stateless</span></div>
+            <pre class="terminal__body"><span class="l-rule">================================================================
+  WITHOUT a thread — each turn is stateless
+================================================================</span>
+
+<span class="l-user">Applicant: Based on everything I told you, do we pre-qualify? Summarize first.</span>
+<span class="l-agent">Advisor:   I don't have any details yet — I'm not seeing prior messages in this
+conversation. Could you share your annual income, available down payment, and
+the home price you're targeting?</span></pre>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Where threads live in production</div>
+              <div class="callout__body">In-process threads are perfect for a single request. For chat apps that span sessions, persist the conversation (database, cache) and rehydrate it — you'll see durable memory and context providers in the Memory &amp; Context lesson later in the bootcamp.</div>
+            </div>
+          </div>
+
+          <h2>Mental model</h2>
+          <ol class="steps">
+            <li><strong>One thread = one conversation.</strong> Different users → different threads.</li>
+            <li><strong>Pass it every turn.</strong> Forgetting <code>thread=</code> silently makes the agent amnesiac.</li>
+            <li><strong>Threads are cheap.</strong> Create a new one whenever you want a clean slate.</li>
+          </ol>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

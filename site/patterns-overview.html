@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Architecture Patterns Overview · Agent Framework Bootcamp</title>
+  <meta name="description" content="A field guide to the agent architecture patterns used throughout this bootcamp — single agent, supervisor/orchestrator, and secured remote MCP — and when to reach for each." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Architecture</span>
+            <span class="badge badge--intermediate">Intermediate</span>
+            <span>⏱️ 10 min</span>
+          </div>
+          <h1>Architecture Patterns Overview</h1>
+          <p class="doc-lead">
+            Patterns are reusable answers to recurring design questions. This page is the map;
+            each pattern links to a full lesson with working code.
+          </p>
+
+          <h2>Single agent with tools</h2>
+          <p>The simplest useful shape: one agent, a focused instruction set, and a handful of function tools. Reach for this when a task fits in one reasoning loop.</p>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Single agent with function tools</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    U[User] --> A[Agent]
+    A -->|calls| T1[get_inventory]
+    A -->|calls| T2[create_order]
+    T1 --> A
+    T2 --> A
+    A --> U
+              </pre>
+            </div>
+            <div class="diagram__caption">One agent, deterministic tools, one conversation thread.</div>
+          </div>
+
+          <h2>Supervisor / orchestrator</h2>
+          <p>When work spans multiple specialities, a <strong>supervisor</strong> routes to specialist agents and aggregates their results. This keeps each agent's context small and its instructions sharp.</p>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Supervisor routing to specialists</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TD
+    U[User] --> S[Supervisor Agent]
+    S --> A[Billing Agent]
+    S --> B[Logistics Agent]
+    S --> C[Support Agent]
+    A --> S
+    B --> S
+    C --> S
+    S --> U
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class S hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">A coordinator delegates to focused sub-agents and merges the outcome.</div>
+          </div>
+
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">Don't over-orchestrate</div>
+              <div class="callout__body">Multi-agent systems add latency and cost. Start with one agent; introduce a supervisor only when a single agent's instructions become unmanageable or its tools conflict.</div>
+            </div>
+          </div>
+
+          <h2>Remote tools via MCP</h2>
+          <p>Expose capabilities as <strong>MCP servers</strong> so any agent can discover and call them over a network boundary — hosted on Function Apps, Logic Apps, or a FastMCP service, and secured behind a gateway with OAuth.</p>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Agents calling secured remote MCP servers</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    A1[Agent A] --> G["Agent Gateway<br/>OAuth · rate limit"]
+    A2[Agent B] --> G
+    G --> R[(Agent Registry)]
+    G --> M1[MCP · Function App]
+    G --> M2[MCP · Logic App]
+    G --> M3[FastMCP Service]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class G hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">A gateway centralises auth, rate limiting, and discovery for remote tools.</div>
+          </div>
+
+          <p>Each pattern above has a dedicated lesson with runnable code, deployment steps, and the trade-offs that matter in production.</p>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

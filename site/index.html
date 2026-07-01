@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Microsoft Agent Framework Bootcamp</title>
+  <meta name="description" content="A hands-on bootcamp for building production AI agents with the Microsoft Agent Framework (Python 1.8.x) — from your first agent to secured, observable, multi-agent systems." />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('af-theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+
+  <main>
+    <section class="hero">
+      <span class="hero__eyebrow">⚡ Microsoft Agent Framework · Python 1.8.x</span>
+      <h1 class="hero__title">Build <span class="grad">production AI agents</span>, step by step</h1>
+      <p class="hero__sub">
+        A hands-on bootcamp that takes you from your first single agent to secured,
+        observable, multi-agent systems — with real enterprise scenarios and runnable code.
+      </p>
+      <div class="hero__cta">
+        <a class="btn btn--primary" href="introduction.html">Start learning →</a>
+        <a class="btn btn--ghost" href="https://github.com/Rajkumar-21/Microsoft-AgentFramework-Bootcamp" target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+    </section>
+
+    <div class="home-wrap">
+      <h2 class="home-section-title">Your learning path</h2>
+      <p class="home-section-sub">Each lesson ships with a unique enterprise scenario, working code, diagrams, and terminal output.</p>
+
+      <div class="card-grid">
+        <a class="card" href="introduction.html">
+          <div class="card__icon">🚀</div>
+          <div class="card__title">Get Started</div>
+          <div class="card__desc">Orientation, environment setup, your first agent, and choosing a provider.</div>
+        </a>
+        <a class="card" href="function-tools.html">
+          <div class="card__icon">🧱</div>
+          <div class="card__title">Core Foundations</div>
+          <div class="card__desc">Function tools, conversation threads, and token-by-token streaming.</div>
+        </a>
+        <a class="card" href="patterns-overview.html">
+          <div class="card__icon">🏛️</div>
+          <div class="card__title">Architecture Patterns</div>
+          <div class="card__desc">Single agent, supervisor/orchestrator, and secured remote MCP tools.</div>
+        </a>
+        <a class="card" href="https://github.com/Rajkumar-21/Microsoft-AgentFramework-Bootcamp/tree/main/modules" target="_blank" rel="noopener">
+          <div class="card__icon">💻</div>
+          <div class="card__title">Runnable Modules</div>
+          <div class="card__desc">Every lesson maps to a <code>modules/</code> folder you can run locally.</div>
+        </a>
+      </div>
+
+      <h2 class="home-section-title">Why this bootcamp</h2>
+      <p class="home-section-sub">Designed to read like official, industry-grade documentation.</p>
+      <div class="card-grid">
+        <div class="card">
+          <div class="card__icon">🏢</div>
+          <div class="card__title">Real enterprise scenarios</div>
+          <div class="card__desc">Atlas readiness, Contoso expenses, Northwind triage, Lakeside orders, Summit Bank, Helios SRE.</div>
+        </div>
+        <div class="card">
+          <div class="card__icon">✅</div>
+          <div class="card__title">Verified 1.8.x API</div>
+          <div class="card__desc">Code matches the current Agent Framework Python API — no guesswork.</div>
+        </div>
+        <div class="card">
+          <div class="card__icon">📊</div>
+          <div class="card__title">Interactive diagrams</div>
+          <div class="card__desc">Mermaid flowcharts and sequence diagrams for every pattern.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    Built for the <a href="https://github.com/Rajkumar-21/Microsoft-AgentFramework-Bootcamp" target="_blank" rel="noopener">Microsoft Agent Framework Bootcamp</a> · Plain HTML/CSS/JS · Deployed on GitHub Pages
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

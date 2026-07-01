@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent-to-Agent (A2A) · Agent Framework Bootcamp</title>
+  <meta name="description" content="Connect agents across organizational boundaries with the open Agent-to-Agent (A2A) protocol — call a remote partner agent with A2AAgent, federate it as a tool, and expose your own agent as an A2A server for the Nexus partner network." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 16 min</span>
+          </div>
+          <h1>Agent-to-Agent (A2A)</h1>
+          <p class="doc-lead">
+            Until now every agent lived in one process. <strong>A2A</strong> is an open protocol for agents to
+            talk across processes, teams, and <em>organizations</em> over HTTP/JSON-RPC. A remote agent advertises
+            its skills through an <strong>agent card</strong>; you call it like a local one. You'll build the
+            <strong>Nexus partner network</strong>: connect to a partner's shipping agent, federate it as a tool,
+            and expose your own agent as an A2A server.
+          </p>
+
+          <h2>Agents as networked services</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Nexus: calling and exposing agents over A2A</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    L{{"🧭 Nexus Concierge"}} -->|"A2AAgent.run()"| NET(("🌐 A2A / JSON-RPC"))
+    NET --> R1["🚚 Partner: Shipping Agent"]
+    NET --> R2["💱 Partner: FX Agent"]
+    R1 -. "/.well-known/agent-card.json" .-> NET
+    YOURS["🏷️ Your Agent + A2AExecutor"] -->|"serves card"| NET
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class L,YOURS hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Each agent publishes a card at a well-known URL describing its skills. Clients discover and invoke it without sharing code or models.</div>
+          </div>
+
+          <h2>1 · Call a remote agent</h2>
+          <p>
+            Install the A2A extra, then open an <code>A2AAgent</code> pointed at the partner's URL. It fetches the
+            agent card and behaves like any local agent — <code>run()</code>, streaming, threads.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">client.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python"># pip install agent-framework-a2a --pre
+import asyncio
+from agent_framework.a2a import A2AAgent
+
+
+async def main() -> None:
+    async with A2AAgent(
+        name="shipping_partner",
+        url="https://partners.example.com/agents/shipping",
+    ) as shipping:
+        response = await shipping.run("ETA for tracking 1Z-88R to 60601?")
+        print(response.messages[0].text)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <h2>2 · Federate the remote agent as a tool</h2>
+          <p>
+            A remote agent is still an agent — so <code>.as_tool()</code> works. Drop the partner's capability
+            straight into your local concierge's toolset; the model calls it like any function.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">concierge.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework.azure import AzureOpenAIChatClient
+from agent_framework.a2a import A2AAgent
+
+async def build_concierge():
+    shipping = A2AAgent(name="shipping", url="https://partners.example.com/agents/shipping")
+
+    concierge = AzureOpenAIChatClient().create_agent(
+        name="NexusConcierge",
+        instructions="Help customers. For delivery questions, use the shipping tool.",
+        tools=[
+            shipping.as_tool(
+                name="track_shipment",
+                description="Get delivery status/ETA for a tracking number.",
+                arg_name="question",
+            ),
+        ],
+    )
+    return concierge</code></pre>
+          </div>
+
+          <h2>3 · Expose your own agent over A2A</h2>
+          <p>
+            Wrap any agent in an <code>A2AExecutor</code> and host it with the <code>a2a-sdk</code> as a Starlette
+            (ASGI) app. The framework serves the agent card at the well-known path so partners can discover it.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">server.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework.a2a import A2AExecutor
+from agent_framework.azure import AzureOpenAIChatClient
+
+agent = AzureOpenAIChatClient().create_agent(
+    name="CatalogAgent",
+    instructions="Answer questions about our product catalog and pricing.",
+)
+
+# A2AExecutor adapts the agent to the A2A server interface.
+executor = A2AExecutor(agent)
+# Host `executor` with the a2a-sdk (Starlette/ASGI). It publishes:
+#   GET /.well-known/agent-card.json   → discovery
+#   POST /                              → JSON-RPC invocation</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">partner discovers your agent</span></div>
+            <pre class="terminal__body"><span class="l-rule">curl https://you.example.com/.well-known/agent-card.json</span>
+<span class="l-agent">{ "name": "CatalogAgent",
+  "description": "Answer questions about our product catalog and pricing.",
+  "url": "https://you.example.com/",
+  "skills": [ { "id": "catalog", "name": "Catalog Q&amp;A" } ] }</span></pre>
+          </div>
+
+          <h2>A2A vs. the in-process patterns</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Pattern</th><th>Boundary</th><th>Transport</th></tr></thead>
+              <tbody>
+                <tr><td><a href="agent-as-tool.html">Agent-as-tool</a></td><td>Same process</td><td>In-memory call</td></tr>
+                <tr><td><a href="supervisor-agent.html">Supervisor</a></td><td>Same process</td><td>In-memory orchestration</td></tr>
+                <tr><td><strong>A2A</strong></td><td>Across processes / orgs</td><td>HTTP + JSON-RPC</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Discovery without code sharing</div>
+              <div class="callout__body">You only need the partner's URL. An <code>A2ACardResolver</code> reads the <code>/.well-known/agent-card.json</code> to learn the agent's skills at runtime — versioned, language-agnostic contracts instead of shared libraries.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">A2A is one hosting surface among several</div>
+              <div class="callout__body">A2A is ideal for cross-org federation, but it's not the only way to expose an agent. You can also publish OpenAI-compatible endpoints, run on Azure Functions for long-running jobs, or serve a web UI — the full menu you'll work through in <a href="deployment.html">Deployment</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Setup &amp; Configuration · Agent Framework Bootcamp</title>
+  <meta name="description" content="Atlas readiness gate — provision Python, the Agent Framework, and Azure credentials, then validate the environment before any agent runs." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Get Started</span>
+            <span class="badge badge--beginner">Beginner</span>
+            <span>⏱️ 10 min</span>
+          </div>
+          <h1>Setup &amp; Configuration</h1>
+          <p class="doc-lead">
+            Before any agent runs, the <strong>Atlas</strong> team gates every environment
+            through a readiness check. You'll provision the runtime, install the framework,
+            wire up Azure credentials, and validate it all with a script that exits non-zero
+            when something's missing.
+          </p>
+
+          <h2>The configuration surface</h2>
+          <p>Three things must be true before an agent can start: a supported Python, the framework installed, and valid Azure credentials.</p>
+
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Configuration surface</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TD
+    P[Python 3.13+] --> R{Ready?}
+    F[agent-framework 1.8.x] --> R
+    C[Azure credentials] --> R
+    C --> E1[AZURE_OPENAI_ENDPOINT]
+    C --> E2[AZURE_OPENAI_API_KEY]
+    C --> E3[AZURE_OPENAI_CHAT_DEPLOYMENT_NAME]
+    R -->|yes| OK[Agent can run ✓]
+    R -->|no| STOP[Blocked ✗]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class OK hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Optional: Foundry project endpoint and Application Insights for later lessons.</div>
+          </div>
+
+          <h2>Provision the environment</h2>
+          <ol class="steps">
+            <li>Install <strong>Python 3.13+</strong> (3.10 is the minimum; 3.13 recommended).</li>
+            <li>Create an isolated environment and add the framework with <strong>uv</strong>.</li>
+            <li>Provision an <strong>Azure OpenAI</strong> resource and deploy a chat model.</li>
+            <li>Export the required environment variables.</li>
+          </ol>
+
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">bash</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-bash">uv venv
+uv add agent-framework</code></pre>
+          </div>
+
+          <p>Set the credentials Atlas requires (PowerShell):</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">PowerShell</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-powershell">$env:AZURE_OPENAI_ENDPOINT = "https://your-resource.openai.azure.com/"
+$env:AZURE_OPENAI_API_KEY = "your-api-key"
+$env:AZURE_OPENAI_CHAT_DEPLOYMENT_NAME = "gpt-4o"</code></pre>
+          </div>
+
+          <h2>The readiness validator</h2>
+          <p>A small script makes the gate enforceable in CI — it returns a clear pass/fail and a non-zero exit code when blocked.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">modules/01_setup_and_configuration/main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import os
+import sys
+from dataclasses import dataclass
+
+MIN_PYTHON = (3, 10)
+RECOMMENDED = (3, 13)
+REQUIRED_VARS = (
+    "AZURE_OPENAI_ENDPOINT",
+    "AZURE_OPENAI_API_KEY",
+    "AZURE_OPENAI_CHAT_DEPLOYMENT_NAME",
+)
+
+
+@dataclass
+class CheckResult:
+    name: str
+    ok: bool
+    detail: str
+
+
+def check_env() -> list[CheckResult]:
+    results: list[CheckResult] = []
+
+    py = sys.version_info[:2]
+    results.append(CheckResult(
+        "python",
+        py >= MIN_PYTHON,
+        f"{py[0]}.{py[1]} (min {MIN_PYTHON[0]}.{MIN_PYTHON[1]}, rec {RECOMMENDED[0]}.{RECOMMENDED[1]})",
+    ))
+
+    for var in REQUIRED_VARS:
+        present = bool(os.environ.get(var))
+        results.append(CheckResult(var, present, "set" if present else "MISSING"))
+
+    return results
+
+
+def main() -> int:
+    results = check_env()
+    for r in results:
+        mark = "✓" if r.ok else "✗"
+        print(f"  {mark} {r.name:<38} {r.detail}")
+    blocked = [r for r in results if not r.ok]
+    if blocked:
+        print(f"\nBlocked — {len(blocked)} check(s) failed.")
+        return 1
+    print("\nReady — environment passes the Atlas readiness gate.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())</code></pre>
+          </div>
+
+          <h2>Run the gate</h2>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — ready</span></div>
+            <pre class="terminal__body"><span class="l-success">  ✓ python                                 3.13 (min 3.10, rec 3.13)
+  ✓ AZURE_OPENAI_ENDPOINT                   set
+  ✓ AZURE_OPENAI_API_KEY                    set
+  ✓ AZURE_OPENAI_CHAT_DEPLOYMENT_NAME       set</span>
+
+Ready — environment passes the Atlas readiness gate.
+<span class="l-comment"># exit code 0</span></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — blocked</span></div>
+            <pre class="terminal__body">  ✓ python                                 3.13 (min 3.10, rec 3.13)
+  ✓ AZURE_OPENAI_ENDPOINT                   set
+<span class="l-error">  ✗ AZURE_OPENAI_API_KEY                    MISSING
+  ✗ AZURE_OPENAI_CHAT_DEPLOYMENT_NAME       MISSING
+
+Blocked — 2 check(s) failed.</span>
+<span class="l-comment"># exit code 1</span></pre>
+          </div>
+
+          <h2>Enforce it in CI</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">.github/workflows/readiness.yml</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-yaml">name: readiness
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.13' }
+      - run: pip install agent-framework
+      - run: python modules/01_setup_and_configuration/main.py
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_CHAT_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_CHAT_DEPLOYMENT_NAME }}</code></pre>
+          </div>
+
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">Never commit keys</div>
+              <div class="callout__body">Keep credentials in environment variables or a secret store. The validator only checks presence — it never prints values.</div>
+            </div>
+          </div>
+          <div class="callout callout--success">
+            <div class="callout__icon">✅</div>
+            <div>
+              <div class="callout__title">Green gate = go</div>
+              <div class="callout__body">Once this exits 0, every later lesson will run. Next, you'll build your first agent.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

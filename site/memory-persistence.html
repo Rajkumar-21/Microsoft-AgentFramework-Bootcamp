@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Memory &amp; Persistence · Agent Framework Bootcamp</title>
+  <meta name="description" content="Give agents memory: persist a conversation across sessions with ChatMessageStore + thread serialization, and inject long-term knowledge with a custom ContextProvider — build the Aurora concierge that remembers returning customers." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 18 min</span>
+          </div>
+          <h1>Memory &amp; Persistence</h1>
+          <p class="doc-lead">
+            By default an agent forgets everything when the process ends. Production assistants can't. Agent
+            Framework gives you two distinct memory layers: <strong>thread persistence</strong> (serialize the
+            running conversation so it survives restarts) and <strong>context providers</strong> (inject
+            durable, cross-session knowledge before each turn). You'll build the <strong>Aurora concierge</strong>,
+            which recognizes a returning customer and recalls their preferences.
+          </p>
+
+          <h2>Two layers of memory</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Aurora: short-term thread + long-term context</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    U["💬 User turn"] --> CP["🧠 ContextProvider.invoking()"]
+    CP -->|"injects known prefs"| A{{"🤝 Aurora Agent"}}
+    A --> TH["🧵 Thread (ChatMessageStore)"]
+    TH -->|"serialize()"| DB[("💾 Store / DB")]
+    DB -->|"deserialize_thread()"| TH
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class CP,A,TH hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">The thread is <em>this conversation's</em> history; the context provider is <em>everything we know</em> about the user, fetched fresh each turn.</div>
+          </div>
+
+          <h2>1 · Persist the conversation thread</h2>
+          <p>
+            Attach a <code>ChatMessageStore</code> via <code>chat_message_store_factory</code>. After a turn,
+            <code>thread.serialize()</code> returns a plain dict you can save anywhere; later,
+            <code>agent.deserialize_thread(state)</code> restores it.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+import json
+from agent_framework import ChatMessageStore
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+async def main() -> None:
+    client = AzureOpenAIChatClient()
+
+    aurora = client.create_agent(
+        name="Aurora",
+        instructions="You are Aurora, a warm hotel concierge. Be concise and personal.",
+        chat_message_store_factory=ChatMessageStore,
+    )
+
+    # --- session 1 ---
+    thread = await aurora.get_new_thread()
+    await aurora.run("Hi, I'm Mara. I always take a high floor, away from elevators.",
+                     thread=thread)
+
+    state = await thread.serialize()
+    with open("mara_thread.json", "w") as f:
+        json.dump(state, f)  # persist between sessions</code></pre>
+          </div>
+
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py (cont.) — session 2, later</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">    # --- session 2 (new process / much later) ---
+    with open("mara_thread.json") as f:
+        saved = json.load(f)
+
+    thread = await aurora.deserialize_thread(saved)   # history restored
+    reply = await aurora.run("It's Mara again — book me a room for Friday.",
+                             thread=thread)
+    print(reply.text)
+    # → "Welcome back, Mara! I've reserved a high floor away from the elevators..."
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <h2>2 · Inject long-term memory with a ContextProvider</h2>
+          <p>
+            Thread history is per-conversation. For knowledge that spans <em>every</em> conversation — a loyalty
+            tier, dietary needs, past complaints — implement a <code>ContextProvider</code>. Its
+            <code>invoking()</code> hook runs before each turn and returns a <code>Context</code> whose
+            <code>instructions</code> are merged into the prompt.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">memory.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from collections.abc import Sequence
+from agent_framework import ChatMessage, Context, ContextProvider
+
+
+class CustomerMemory(ContextProvider):
+    """Loads durable customer facts from your CRM each turn."""
+
+    def __init__(self, crm: dict[str, str]):
+        self._crm = crm
+
+    async def invoking(
+        self, messages: Sequence[ChatMessage], **kwargs
+    ) -> Context:
+        prefs = self._crm.get("preferences", "No profile on file.")
+        return Context(
+            instructions=f"Known facts about this guest: {prefs}"
+        )</code></pre>
+          </div>
+
+          <p>Pass it via <code>context_provider=</code> (a single provider — see the note below):</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py — wiring memory in</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">    crm = {"preferences": "Gold tier; gluten-free; prefers late checkout."}
+
+    aurora = client.create_agent(
+        name="Aurora",
+        instructions="You are Aurora, a warm hotel concierge.",
+        chat_message_store_factory=ChatMessageStore,
+        context_provider=CustomerMemory(crm),
+    )
+
+    reply = await aurora.run("Any dining tips for tonight?")
+    print(reply.text)
+    # → "Since you're gluten-free, I'd suggest our seafood grill — fully GF menu..."</code></pre>
+          </div>
+
+          <h2>Which layer do I use?</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Need</th><th>Layer</th><th>API</th></tr></thead>
+              <tbody>
+                <tr><td>Resume a chat after a restart</td><td>Thread persistence</td><td><code>thread.serialize()</code> / <code>deserialize_thread()</code></td></tr>
+                <tr><td>Recall facts across all chats</td><td>Context provider</td><td><code>ContextProvider.invoking()</code></td></tr>
+                <tr><td>Semantic recall over many memories</td><td>Vector-backed provider</td><td><code>RedisProvider</code> (full-text / vector)</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">Breaking change: <code>context_provider</code> is singular</div>
+              <div class="callout__body">Recent Python builds replaced the plural <code>context_providers=[...]</code> with a single <code>context_provider=</code>, and removed <code>AggregateContextProvider</code>. To combine sources, compose them inside one provider's <code>invoking()</code> method.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Scale memory with Redis</div>
+              <div class="callout__body">For real deployments, back your provider with <code>RedisProvider</code> — it supports full-text and optional hybrid vector search, so the agent retrieves only the <em>relevant</em> memories instead of stuffing every fact into the prompt. Persist thread state to the same store and your assistant is fully stateful across regions.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

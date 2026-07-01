@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sequential Workflows · Agent Framework Bootcamp</title>
+  <meta name="description" content="Chain specialist agents into a pipeline with SequentialBuilder — build the Quill content pipeline where a drafter, editor, and SEO packager each refine the previous agent's output." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Tools &amp; Workflows</span>
+            <span class="badge badge--intermediate">Intermediate</span>
+            <span>⏱️ 15 min</span>
+          </div>
+          <h1>Sequential Workflows</h1>
+          <p class="doc-lead">
+            One agent doing five jobs is a jack of all trades. A <strong>sequential workflow</strong> chains
+            <em>specialists</em> — each agent's output becomes the next one's input. You'll build the
+            <strong>Quill content pipeline</strong>: a <strong>Drafter</strong> writes, an
+            <strong>Editor</strong> tightens, and an <strong>SEO Packager</strong> ships — a publishing
+            assembly line.
+          </p>
+
+          <h2>The pipeline</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Quill: draft → edit → package</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    IN["Topic brief"] --> D["✍️ Drafter<br/>writes the post"]
+    D --> E["✂️ Editor<br/>tightens tone &amp; clarity"]
+    E --> S["🚀 SEO Packager<br/>title · meta · tags"]
+    S --> OUT[["Publish-ready content"]]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class D,E,S hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Each stage sees everything before it, so the editor edits the draft and the packager packages the edited version.</div>
+          </div>
+
+          <h2>1 · Build the specialists</h2>
+          <p>Three agents from one shared client — each with a tightly scoped instruction.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from agent_framework import SequentialBuilder
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+async def main() -> None:
+    client = AzureOpenAIChatClient()
+
+    drafter = client.create_agent(
+        name="Drafter",
+        instructions=(
+            "You are a content writer. Write a focused 3-paragraph blog post "
+            "from the given brief. Engaging, concrete, no filler."
+        ),
+    )
+
+    editor = client.create_agent(
+        name="Editor",
+        instructions=(
+            "You are a line editor. Tighten the draft for clarity and tone, "
+            "remove redundancy, and fix any weak claims. Return the improved post."
+        ),
+    )
+
+    packager = client.create_agent(
+        name="SEO-Packager",
+        instructions=(
+            "You are an SEO packager. Add a compelling title, a 155-char meta "
+            "description, and 5 tags. Output the final publish-ready document."
+        ),
+    )</code></pre>
+          </div>
+
+          <h2>2 · Wire them with <code>SequentialBuilder</code></h2>
+          <p>
+            Pass the participants in order. <code>build()</code> returns a <code>Workflow</code> you run like
+            anything else; <code>get_outputs()</code> returns the final stage's output.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py (cont.)</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">    workflow = SequentialBuilder(
+        participants=[drafter, editor, packager],
+    ).build()
+
+    result = await workflow.run(
+        "Write a post: why platform teams should publish internal MCP servers."
+    )
+
+    for output in result.get_outputs():
+        print(output)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Stream the pipeline</div>
+              <div class="callout__body">Pass <code>stream=True</code> to <code>workflow.run(...)</code> and iterate events to watch each stage produce output live — great for long pipelines where you want progress, not a long silence.</div>
+            </div>
+          </div>
+
+          <h2>Run it</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">bash</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-bash">cd modules/11_workflows_sequential
+python main.py</code></pre>
+          </div>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — quill pipeline</span></div>
+            <pre class="terminal__body"><span class="l-agent"># Ship Tools, Not Tickets: Why Platform Teams Should Publish MCP Servers
+
+**Meta:** Stop rebuilding the same integrations. Publish internal MCP servers
+so every agent in your org can reuse vetted tools through one URL.
+
+When every team wires its own integrations, you get five slightly different
+payment clients and zero shared governance. Publishing an internal MCP server
+flips that: the platform team owns one vetted tool surface, and any agent
+consumes it with a single connection...
+
+**Tags:** platform-engineering, mcp, ai-agents, internal-tools, governance</span>
+
+<span class="l-comment">[pipeline: Drafter -> Editor -> SEO-Packager · 3 stages complete]</span></pre>
+          </div>
+
+          <h2>Sequential vs. a single mega-prompt</h2>
+          <ol class="steps">
+            <li><strong>Separation of concerns</strong> — each agent has one job and one instruction to tune.</li>
+            <li><strong>Quality compounds</strong> — the editor fixes what the drafter missed; the packager never has to write prose.</li>
+            <li><strong>Swappable stages</strong> — drop in a "Legal Review" agent without touching the others.</li>
+          </ol>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Pipelines model real processes</div>
+              <div class="callout__body">Intake → enrich → validate → route is the shape of countless business processes. Sequential workflows let you express that directly, with an agent per step you can test, observe, and improve independently. When steps are <em>independent</em> instead of dependent, reach for <a href="workflows-concurrent.html">concurrent workflows</a> to run them in parallel.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Declarative Agents · Agent Framework Bootcamp</title>
+  <meta name="description" content="Define agents and workflows in YAML instead of code — load them with AgentFactory and WorkflowFactory so non-developers can edit, version, and ship the Beacon content pipeline without touching Python." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 16 min</span>
+          </div>
+          <h1>Declarative Agents</h1>
+          <p class="doc-lead">
+            Everything so far has been Python. But agent <em>configuration</em> — instructions, model, the shape
+            of a workflow — is data, not logic. Agent Framework lets you describe it in <strong>YAML</strong> and
+            load it at runtime. Product managers tweak prompts, ops version the files in Git, and nobody redeploys
+            code. You'll define the <strong>Beacon content pipeline</strong> declaratively: an agent in YAML, then
+            a whole workflow in YAML.
+          </p>
+
+          <h2>Configuration as data</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Beacon: YAML compiled into a running workflow</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    Y1["📄 agent.yaml"] --> AF["🏭 AgentFactory"]
+    Y2["📄 content-pipeline.yaml"] --> WF["🏭 WorkflowFactory"]
+    AF --> AG["🤖 AIAgent"]
+    AG -.register_agent.-> WF
+    WF --> RUN[["▶️ Executable workflow"]]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class AF,WF,AG hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Factories turn declarative YAML into the same objects you'd build by hand — so declarative and programmatic agents interoperate freely.</div>
+          </div>
+
+          <h2>1 · Define an agent in YAML</h2>
+          <p>
+            An agent spec uses <code>kind: Prompt</code> with <code>name</code>, <code>instructions</code>,
+            <code>description</code>, and a <code>model</code> block. Values prefixed with <code>=Env.</code>
+            resolve from environment variables at load time.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">agent-config.yaml</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-yaml">kind: Prompt
+name: Researcher
+displayName: Beacon Researcher
+description: Gathers and verifies facts on a given topic.
+instructions: >
+  You research a topic and return 5 verified, sourced facts.
+  Be precise; flag anything you cannot confirm.
+
+model:
+  id: =Env.AZURE_OPENAI_MODEL
+  connection:
+    kind: remote
+    endpoint: =Env.FOUNDRY_PROJECT_ENDPOINT</code></pre>
+          </div>
+          <p>Install the package and load it with <code>AgentFactory</code>:</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">load_agent.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python"># pip install agent-framework-declarative agent-framework-foundry --pre
+import asyncio
+from pathlib import Path
+from agent_framework.declarative import AgentFactory
+from azure.identity.aio import AzureCliCredential
+
+
+async def main() -> None:
+    yaml_path = Path(__file__).parent / "agent-config.yaml"
+    async with (
+        AzureCliCredential() as credential,
+        AgentFactory(client_kwargs={"credential": credential})
+            .create_agent_from_yaml_path(yaml_path) as agent,
+    ):
+        response = await agent.run("Research: undersea data centers.")
+        print(response.text)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <h2>2 · Define the whole pipeline in YAML</h2>
+          <p>
+            A workflow spec has <code>name</code>, optional <code>inputs</code>, and a list of
+            <code>actions</code>. Here a sequential pipeline invokes three registered agents.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">content-pipeline.yaml</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-yaml">name: beacon-content-pipeline
+description: Research, write, and edit an article on a topic.
+
+inputs:
+  topic:
+    type: string
+    description: The subject to write about.
+
+actions:
+  - kind: InvokeAgent
+    id: research
+    displayName: Research the topic
+    agent: ResearcherAgent
+    input: =Workflow.Inputs.topic
+    output: Local.facts
+
+  - kind: InvokeAgent
+    id: write
+    displayName: Draft the article
+    agent: WriterAgent
+    input: =Local.facts
+    output: Local.draft
+
+  - kind: InvokeAgent
+    id: edit
+    displayName: Polish for publication
+    agent: EditorAgent
+    input: =Local.draft</code></pre>
+          </div>
+          <p>Register your agents by the names the YAML references, then build and run:</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">run_pipeline.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework.declarative import WorkflowFactory
+
+factory = WorkflowFactory()
+factory.register_agent("ResearcherAgent", researcher_agent)
+factory.register_agent("WriterAgent", writer_agent)
+factory.register_agent("EditorAgent", editor_agent)
+
+workflow = factory.create_workflow_from_yaml_path("content-pipeline.yaml")
+result = await workflow.run({"topic": "undersea data centers"})
+print(result)</code></pre>
+          </div>
+
+          <h2>Declarative vs. programmatic</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Use declarative when…</th><th>Use programmatic when…</th></tr></thead>
+              <tbody>
+                <tr><td>Standard orchestration patterns</td><td>Complex custom control flow</td></tr>
+                <tr><td>Config changes frequently</td><td>Tight integration with existing Python</td></tr>
+                <tr><td>Non-developers edit the flow</td><td>You need maximum flexibility</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">Python 3.10–3.13 only</div>
+              <div class="callout__body">The declarative engine uses Power Fx for its <code>=Expr</code> expressions, which doesn't yet support Python 3.14. Pin a supported interpreter for declarative projects.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Centralize agent definitions</div>
+              <div class="callout__body">Store agent and workflow YAML in <strong>Azure App Configuration</strong> (<code>azure-appconfiguration-provider</code> + <code>AgentFactory</code> + <code>DefaultAzureCredential</code>). Ops updates an instruction in the portal and every instance picks it up — prompts become governed configuration, not redeploys. Declarative YAML can even call MCP tools and HTTP endpoints, bridging to the integrations from <a href="mcp-tools.html">MCP Tools</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

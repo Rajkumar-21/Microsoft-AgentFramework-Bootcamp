@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hosted Tools · Agent Framework Bootcamp</title>
+  <meta name="description" content="Let the model run code and search the web with server-side HostedCodeInterpreterTool and HostedWebSearchTool — build the Vesper Research Desk analyst that crunches numbers and cites live sources." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Tools &amp; Workflows</span>
+            <span class="badge badge--intermediate">Intermediate</span>
+            <span>⏱️ 13 min</span>
+          </div>
+          <h1>Hosted Tools</h1>
+          <p class="doc-lead">
+            Function tools run <em>your</em> Python. <strong>Hosted tools</strong> run on the model
+            provider's side — a sandboxed <strong>code interpreter</strong> and a <strong>web search</strong>
+            the model invokes itself, no infrastructure from you. You'll build the
+            <strong>Vesper Research Desk</strong>: an equity-research assistant that searches live sources
+            and runs real arithmetic instead of hallucinating numbers.
+          </p>
+
+          <h2>Local tools vs. hosted tools</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Where the tool executes</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    U[User] --> AG{{Agent}}
+    AG -->|local| F["Your Python function<br/>runs in your process"]
+    AG -->|hosted| H1["Code Interpreter<br/>runs in provider sandbox"]
+    AG -->|hosted| H2["Web Search<br/>runs on provider"]
+    F --> AG
+    H1 --> AG
+    H2 --> AG
+    classDef hi fill:#06b6d4,stroke:#0891b2,color:#fff;
+    class H1,H2 hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">Hosted tools need no servers from you — the provider executes them and returns the result to the agent.</div>
+          </div>
+
+          <h2>1 · Attach hosted tools</h2>
+          <p>
+            Both tools are plain classes from <code>agent_framework</code>. Construct them and pass them in
+            the agent's <code>tools=[...]</code> list, exactly like function tools.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from agent_framework import HostedCodeInterpreterTool, HostedWebSearchTool
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+async def main() -> None:
+    agent = AzureOpenAIChatClient().create_agent(
+        name="Vesper-Research",
+        instructions=(
+            "You are an equity research analyst. Use web search for current facts "
+            "and the code interpreter for any calculation. Never estimate numbers "
+            "in your head — compute them. Cite the sources you used."
+        ),
+        tools=[
+            HostedWebSearchTool(),
+            HostedCodeInterpreterTool(),
+        ],
+    )
+
+    resp = await agent.run(
+        "Contoso reported $4.2B revenue this year vs $3.6B last year. "
+        "What is the year-over-year growth rate, and what recent headlines "
+        "might explain it?"
+    )
+    print(resp.text)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Provider support varies</div>
+              <div class="callout__body">Hosted tools depend on the backing service. Azure OpenAI and Foundry expose the code interpreter and web search; some OSS providers don't. If a tool isn't supported, the call raises at run time — check your model's capability matrix.</div>
+            </div>
+          </div>
+
+          <h2>2 · The model decides when to use them</h2>
+          <p>
+            You don't call the tools — the model does. For the prompt above it will search the web for
+            recent Contoso news <em>and</em> run a small division in the sandbox to get an exact growth rate.
+          </p>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — research desk</span></div>
+            <pre class="terminal__body"><span class="l-comment">[web_search] "Contoso revenue 2026 earnings"</span>
+<span class="l-comment">[code_interpreter] (4.2 - 3.6) / 3.6 * 100  ->  16.6666...</span>
+<span class="l-agent">Year-over-year revenue growth is **16.7%** ($3.6B → $4.2B).
+
+Likely drivers from recent coverage:
+- Expansion of the cloud security line (reported new enterprise wins)
+- A price increase on the flagship subscription tier
+- Favorable FX in the EMEA segment
+
+Sources: Contoso FY26 earnings release; two market-news summaries.</span></pre>
+          </div>
+
+          <h2>Computation you can trust</h2>
+          <p>
+            The difference is subtle but critical: without the code interpreter, "16.7%" is a token the model
+            <em>predicts</em>. With it, the number comes from an actual execution. For anything numeric —
+            finance, units, dates, statistics — hosted code execution turns a plausible guess into a verifiable result.
+          </p>
+          <ol class="steps">
+            <li><strong>Web search</strong> grounds the answer in current, citable facts.</li>
+            <li><strong>Code interpreter</strong> guarantees the math is correct, not approximated.</li>
+            <li>The agent stitches both into one grounded, calculated response.</li>
+          </ol>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Hosted vs. local is a governance decision</div>
+              <div class="callout__body">Hosted tools are fast to adopt but run outside your boundary — prompt content leaves your process. For regulated data, prefer local function tools or a private MCP server you control. Use hosted web search for public research, and keep proprietary calculations in code you own. The next two lessons cover MCP and middleware, your levers for exactly that control.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

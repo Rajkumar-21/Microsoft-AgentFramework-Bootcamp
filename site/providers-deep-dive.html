@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Providers Deep Dive · Agent Framework Bootcamp</title>
+  <meta name="description" content="Run one Northwind IT triage agent across two providers — Azure OpenAI and Microsoft Foundry — and choose the right authentication for each." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Get Started</span>
+            <span class="badge badge--beginner">Beginner</span>
+            <span>⏱️ 14 min</span>
+          </div>
+          <h1>Providers Deep Dive</h1>
+          <p class="doc-lead">
+            One agent, two providers. The <strong>Northwind IT triage</strong> agent classifies
+            support tickets identically whether it runs on Azure OpenAI or Microsoft Foundry —
+            only the client and its authentication change.
+          </p>
+
+          <h2>One agent, two providers</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">One agent, two providers</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    I[Shared TRIAGE_INSTRUCTIONS] --> A[Triage Agent]
+    A --> P1[AzureOpenAIChatClient]
+    A --> P2[AzureAIAgentClient · Foundry]
+    P1 --> M1[Azure OpenAI model]
+    P2 --> M2[Foundry model]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class A hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">The instructions and behaviour are identical; the provider is swappable.</div>
+          </div>
+
+          <h2>Shared instructions</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">triage instructions</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">TRIAGE_INSTRUCTIONS = """
+You are Northwind's IT support triage agent. For each ticket, output exactly
+three lines:
+
+Priority: P1 | P2 | P3 | P4
+Queue:    Network | Security | Hardware | Accounts | Software
+Summary:  one concise sentence.
+
+P1 = outage or active security incident; P4 = cosmetic or low impact.
+"""</code></pre>
+          </div>
+
+          <h2>Provider A — Azure OpenAI</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">modules/03_providers_deep_dive/azure_openai_provider.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import os
+from agent_framework.azure import AzureOpenAIChatClient
+from azure.identity.aio import AzureCliCredential
+
+# Option 1 — API key
+client = AzureOpenAIChatClient(
+    endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    api_key=os.environ["AZURE_OPENAI_API_KEY"],
+    deployment_name=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"],
+)
+
+# Option 2 — keyless (recommended): AzureCliCredential / DefaultAzureCredential
+# client = AzureOpenAIChatClient(
+#     endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+#     deployment_name=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"],
+#     credential=AzureCliCredential(),
+# )
+
+agent = client.create_agent(name="TriageAgent", instructions=TRIAGE_INSTRUCTIONS)</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">Azure OpenAI · 3rd-floor network outage</span></div>
+            <pre class="terminal__body"><span class="l-user">Ticket: Whole 3rd floor lost network ~10 minutes ago, no one can reach
+shared drives or the internet.</span>
+<span class="l-agent">Priority: P1
+Queue:    Network
+Summary:  Floor-wide network outage on the 3rd floor affecting all connectivity.</span></pre>
+          </div>
+
+          <h2>Provider B — Microsoft Foundry</h2>
+          <p>Foundry uses <code>AzureAIAgentClient</code> with an async credential. Note the <code>async with</code> credential scope.</p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">modules/03_providers_deep_dive/azure_ai_provider.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework.azure import AzureAIAgentClient
+from azure.identity.aio import AzureCliCredential
+
+
+async def main() -> None:
+    async with AzureCliCredential() as credential:
+        client = AzureAIAgentClient(async_credential=credential)
+        agent = client.create_agent(
+            name="TriageAgent",
+            instructions=TRIAGE_INSTRUCTIONS,
+        )
+        response = await agent.run(
+            "User reports an email asking for their password from 'IT Helpdesk'."
+        )
+        print(response.text)</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">Foundry · suspected phishing</span></div>
+            <pre class="terminal__body"><span class="l-user">Ticket: Email from 'IT Helpdesk' asking the user to confirm their password.</span>
+<span class="l-agent">Priority: P1
+Queue:    Security
+Summary:  Suspected phishing attempt requesting user credentials.</span></pre>
+          </div>
+
+          <h2>Choosing authentication</h2>
+          <ol class="steps">
+            <li><strong>API key</strong> — quickest to start; fine for local dev. Keep it in env vars, never in code.</li>
+            <li><strong>AzureCliCredential</strong> — keyless via your <code>az login</code> session; great for development.</li>
+            <li><strong>DefaultAzureCredential</strong> — production default; tries managed identity, env, CLI, and more in order.</li>
+          </ol>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Prefer keyless in production</div>
+              <div class="callout__body">Managed identity via <code>DefaultAzureCredential</code> removes secrets from your deployment entirely. Reserve API keys for local experiments.</div>
+            </div>
+          </div>
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">Match the credential to the client</div>
+              <div class="callout__body">Foundry's <code>AzureAIAgentClient</code> expects an <em>async</em> credential (<code>azure.identity.aio</code>) and an <code>async with</code> scope so the token provider closes cleanly.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

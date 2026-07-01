@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Capstone Project · Agent Framework Bootcamp</title>
+  <meta name="description" content="Combine everything — workflows, MCP tools, middleware, memory, human-in-the-loop, observability, and Azure deployment — into one enterprise system: the Meridian Operations Center." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 25 min</span>
+          </div>
+          <h1>Capstone Project</h1>
+          <p class="doc-lead">
+            Time to put it all together. The <strong>Meridian Operations Center</strong> is an enterprise
+            incident-and-customer-ops platform that uses nearly every capability in this bootcamp: a
+            <strong>supervisor</strong> coordinating specialists, <strong>MCP tools</strong> for live systems,
+            <strong>middleware</strong> for guardrails, <strong>memory</strong> for continuity,
+            <strong>human-in-the-loop</strong> for risky actions, <strong>observability</strong> end-to-end, and
+            <strong>Azure deployment</strong> for production.
+          </p>
+
+          <h2>The full architecture</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Meridian Operations Center — end-to-end</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TB
+    U["💬 Operator / Customer"] --> FN["⚡ Azure Functions endpoint"]
+    FN --> MW["🛡️ Middleware: auth · PII redaction · rate limit"]
+    MW --> SUP{{"🧭 Supervisor (Magentic)"}}
+
+    SUP --> D["🔎 Diagnostician"]
+    SUP --> R["📚 Researcher"]
+    SUP --> E["🛠️ Remediation"]
+
+    D -->|"MCP"| M1[("📊 Monitoring MCP")]
+    R -->|"MCP"| M2[("📚 Runbooks MCP")]
+    E -->|"approval"| HITL["⏸️ Human approval"]
+    HITL --> E
+
+    SUP --> MEM[("🧠 Memory: thread + context")]
+    SUP --> OTEL["📡 OpenTelemetry → Azure Monitor"]
+    SUP --> OUT[["✅ Resolution + report"]]
+
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class SUP,MW,HITL,OTEL hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">One request flows through hosting, guardrails, an LLM-planned team, live tools, approvals, memory, and telemetry — the shape of a real production agent system.</div>
+          </div>
+
+          <h2>How each lesson plugs in</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Capability</th><th>From</th><th>Role in Meridian</th></tr></thead>
+              <tbody>
+                <tr><td>Function tools</td><td><a href="function-tools.html">Lesson 04</a></td><td>Local actions (page on-call, create ticket)</td></tr>
+                <tr><td>MCP tools</td><td><a href="mcp-tools.html">Lesson 09</a></td><td>Live monitoring &amp; runbook systems</td></tr>
+                <tr><td>Middleware</td><td><a href="middleware-system.html">Lesson 10</a></td><td>Auth, PII redaction, rate limiting</td></tr>
+                <tr><td>Supervisor</td><td><a href="supervisor-agent.html">Lesson 15</a></td><td>Plans &amp; coordinates the specialist team</td></tr>
+                <tr><td>Human-in-the-loop</td><td><a href="human-in-the-loop.html">Lesson 17</a></td><td>Approval gate before remediation</td></tr>
+                <tr><td>Memory</td><td><a href="memory-persistence.html">Lesson 18</a></td><td>Incident history &amp; customer context</td></tr>
+                <tr><td>Observability</td><td><a href="observability.html">Lesson 19</a></td><td>Traces, token cost, audit trail</td></tr>
+                <tr><td>Deployment</td><td><a href="deployment.html">Lesson 22</a></td><td>Durable Azure Functions endpoint</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>1 · Specialists with guardrails and live tools</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">meridian/agents.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from typing import Annotated
+from pydantic import Field
+from agent_framework import tool, MCPStreamableHTTPTool
+from agent_framework.azure import AzureOpenAIChatClient
+
+client = AzureOpenAIChatClient()
+
+# Live systems via MCP (Lesson 09)
+monitoring = MCPStreamableHTTPTool(name="monitoring", url="https://obs.meridian.internal/mcp")
+runbooks = MCPStreamableHTTPTool(name="runbooks", url="https://kb.meridian.internal/mcp")
+
+# Sensitive action gated for human approval (Lesson 17)
+@tool(approval_mode="always_require")
+def apply_remediation(
+    change: Annotated[str, Field(description="The change to apply")],
+) -> str:
+    """Apply a production change. Requires human approval."""
+    return f"Applied: {change}"
+
+diagnostician = client.create_agent(
+    name="Diagnostician",
+    instructions="Find the root cause from metrics and recent deploys.",
+    tools=[monitoring],
+)
+researcher = client.create_agent(
+    name="Researcher",
+    instructions="Match the incident to known runbooks and mitigations.",
+    tools=[runbooks],
+)
+remediation = client.create_agent(
+    name="Remediation",
+    instructions="Propose and apply a minimal, reversible fix with rollback.",
+    tools=[apply_remediation],
+)</code></pre>
+          </div>
+
+          <h2>2 · Supervisor + memory, wrapped in middleware</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">meridian/workflow.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework import MagenticBuilder, ChatMessageStore
+from .agents import client, diagnostician, researcher, remediation
+from .memory import IncidentMemory          # ContextProvider (Lesson 18)
+from .guards import AuthMiddleware, PiiRedactionMiddleware  # Lesson 10
+
+def build_workflow():
+    return (
+        MagenticBuilder()
+        .participants(
+            diagnostician=diagnostician,
+            researcher=researcher,
+            remediation=remediation,
+        )
+        .with_standard_manager(
+            chat_client=client,
+            max_round_count=14,
+            max_stall_count=3,
+            max_reset_count=2,
+        )
+        .build()
+    )</code></pre>
+          </div>
+
+          <h2>3 · Observability + the Azure Functions front door</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">function_app.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from azure.monitor.opentelemetry import configure_azure_monitor
+from agent_framework.observability import configure_otel_providers
+from agent_framework.azure import AgentFunctionApp
+from .workflow import build_workflow
+
+configure_azure_monitor()       # Lesson 19 → Application Insights
+configure_otel_providers()
+
+# Expose the whole supervisor workflow as one durable agent endpoint (Lesson 22)
+meridian = build_workflow().as_agent(name="Meridian")
+app = AgentFunctionApp(agents=[meridian])
+# POST /api/agents/Meridian/run</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">meridian in action</span></div>
+            <pre class="terminal__body"><span class="l-rule">POST /api/agents/Meridian/run  {"input": "checkout 500s since 14:02 deploy"}</span>
+<span class="l-comment">[mw] authn ok · pii redacted · trace 7f3a… started</span>
+<span class="l-comment">[supervisor] plan: diagnose → match runbook → remediate</span>
+<span class="l-agent">Diagnostician: pool exhaustion from deploy 14:02 (pool=5).</span>
+<span class="l-agent">Researcher: runbook DB-07 → raise pool or roll back.</span>
+<span class="l-rule">[approval] apply_remediation('set pool=25') → approved by oncall</span>
+<span class="l-agent">Remediation: applied pool=25; error rate 0.1%. Rollback documented.</span>
+<span class="l-comment">[otel] 1 trace · 9 spans · 24,180 tokens → App Insights</span></pre>
+          </div>
+
+          <h2>Make it yours</h2>
+          <ol class="steps">
+            <li><strong>Swap the domain</strong> — turn Meridian into loan processing, claims triage, or supply-chain ops. The skeleton holds.</li>
+            <li><strong>Add a sub-workflow</strong> — nest a reusable "compliance review" (<a href="sub-workflows.html">Lesson 16</a>) before remediation.</li>
+            <li><strong>Federate a partner</strong> — pull an external vendor agent in over <a href="agent-to-agent.html">A2A</a>.</li>
+            <li><strong>Go declarative</strong> — move the agent definitions to <a href="declarative-agents.html">YAML</a> so ops can tune them without a deploy.</li>
+          </ol>
+
+          <div class="callout callout--success">
+            <div class="callout__icon">🎓</div>
+            <div>
+              <div class="callout__title">You've completed the bootcamp</div>
+              <div class="callout__body">From a <a href="hello-agent.html">single hello agent</a> to a production multi-agent operations center, you now have the full Microsoft Agent Framework toolkit — tools, workflows, orchestration, memory, governance, observability, and deployment. Go build something real.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Production checklist</div>
+              <div class="callout__body">Before go-live: managed-identity auth, approval gates on every irreversible tool, OpenTelemetry to your APM, prompt/response logging policy reviewed, cost limits (<code>max_round_count</code>/<code>max_reset_count</code>), durable checkpoints, and load testing of your busiest path.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

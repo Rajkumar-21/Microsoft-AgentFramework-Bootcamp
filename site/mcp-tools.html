@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MCP Tools · Agent Framework Bootcamp</title>
+  <meta name="description" content="Plug agents into external tool servers with the Model Context Protocol — connect MCPStreamableHTTPTool and MCPStdioTool to build the Orbit DevOps Assistant that answers from live docs and your repo." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Tools &amp; Workflows</span>
+            <span class="badge badge--intermediate">Intermediate</span>
+            <span>⏱️ 16 min</span>
+          </div>
+          <h1>MCP Tools</h1>
+          <p class="doc-lead">
+            The <strong>Model Context Protocol (MCP)</strong> is an open standard for exposing tools to
+            LLMs over a wire protocol. Instead of writing every tool in your codebase, you connect to an
+            <strong>MCP server</strong> and its tools appear to your agent automatically. You'll build the
+            <strong>Orbit DevOps Assistant</strong>: it answers from the live Microsoft Learn MCP server and
+            a local repository MCP — one agent, many tool servers.
+          </p>
+
+          <h2>How MCP fits</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">One agent, federated tool servers</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart LR
+    AG{{Orbit Agent}} -->|HTTP + SSE| M1["MCPStreamableHTTPTool<br/>MS Learn docs"]
+    AG -->|stdio| M2["MCPStdioTool<br/>local repo server"]
+    AG -->|WebSocket| M3["MCPWebsocketTool<br/>internal service"]
+    M1 --> T1[(docs.search)]
+    M2 --> T2[(repo.read_file)]
+    M3 --> T3[(deploy.status)]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class AG hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">The agent discovers each server's tool schemas at connect time and invokes them like native tools.</div>
+          </div>
+
+          <h2>Three transports</h2>
+          <table class="spec-table">
+            <thead><tr><th>Wrapper</th><th>Transport</th><th>Use for</th></tr></thead>
+            <tbody>
+              <tr><td><code>MCPStreamableHTTPTool</code></td><td>HTTP + Server-Sent Events</td><td>Remote/hosted servers (e.g. MS Learn)</td></tr>
+              <tr><td><code>MCPStdioTool</code></td><td>stdin/stdout subprocess</td><td>Local CLI servers (filesystem, git, sqlite)</td></tr>
+              <tr><td><code>MCPWebsocketTool</code></td><td>WebSocket</td><td>Long-lived internal services</td></tr>
+            </tbody>
+          </table>
+
+          <h2>1 · Connect a remote MCP server</h2>
+          <p>
+            MCP tools are async context managers — they open the connection, discover tools, and clean up on
+            exit. Construct inside <code>async with</code> and pass into <code>tools=[...]</code>.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from agent_framework import MCPStreamableHTTPTool
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+async def main() -> None:
+    async with MCPStreamableHTTPTool(
+        name="MSLearn",
+        url="https://learn.microsoft.com/api/mcp",
+    ) as learn_docs:
+        agent = AzureOpenAIChatClient().create_agent(
+            name="Orbit-DevOps",
+            instructions=(
+                "You are a DevOps assistant. When asked about Azure or Microsoft "
+                "tooling, search the Microsoft Learn MCP server and answer from the "
+                "retrieved docs. Quote the exact guidance and link the source."
+            ),
+            tools=[learn_docs],
+        )
+
+        resp = await agent.run(
+            "What's the recommended way to pass secrets to an Azure Container App? "
+            "Cite the docs."
+        )
+        print(resp.text)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <h2>2 · Add a local stdio server</h2>
+          <p>
+            Local MCP servers launch as subprocesses. Here a filesystem server lets the agent read files in
+            your repo — combine it with the docs server for a "search the docs <em>and</em> check our code"
+            assistant.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">local + remote</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">from agent_framework import MCPStdioTool, MCPStreamableHTTPTool
+
+async with (
+    MCPStreamableHTTPTool(name="MSLearn", url="https://learn.microsoft.com/api/mcp") as docs,
+    MCPStdioTool(
+        name="Repo",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-filesystem", "."],
+    ) as repo,
+):
+    agent = AzureOpenAIChatClient().create_agent(
+        name="Orbit-DevOps",
+        instructions="Use Repo to read our code and MSLearn for official guidance.",
+        tools=[docs, repo],
+    )
+    resp = await agent.run("Does our bicep match the docs' secret-handling guidance?")
+    print(resp.text)</code></pre>
+          </div>
+
+          <div class="callout callout--warning">
+            <div class="callout__icon">⚠️</div>
+            <div>
+              <div class="callout__title">Third-party servers are third-party code</div>
+              <div class="callout__body">Connecting to a non-Microsoft MCP server sends prompt content to that provider and runs tools Microsoft hasn't vetted. Prefer servers hosted by trusted providers, review what data is shared, and log tool calls for audit. Pass secrets only via per-run headers — never bake them into a shared client.</div>
+            </div>
+          </div>
+
+          <h2>Run it</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">bash</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-bash">cd modules/09_mcp_tools
+python main.py</code></pre>
+          </div>
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — orbit devops</span></div>
+            <pre class="terminal__body"><span class="l-comment">[MSLearn] microsoft_docs_search "Azure Container Apps secrets"</span>
+<span class="l-agent">The recommended approach is to store secrets at the Container App level and
+reference them from environment variables, or—better for production—reference
+them from Azure Key Vault using a managed identity so no secret value is stored
+in the app definition.
+
+Source: "Manage secrets in Azure Container Apps" (Microsoft Learn).</span></pre>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">MCP is how agents scale past one codebase</div>
+              <div class="callout__body">As tools multiply, you don't want them all in one app. MCP lets platform teams publish tool servers (a payments server, a ticketing server, a docs server) that any agent can consume with a URL. You'll see this federation pattern again in the <a href="patterns-overview.html">Remote tools via MCP</a> architecture and the capstone gateway.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

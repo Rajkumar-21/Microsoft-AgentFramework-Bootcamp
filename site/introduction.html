@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Introduction · Agent Framework Bootcamp</title>
+  <meta name="description" content="Welcome to the Microsoft Agent Framework Bootcamp — the mental model, the building blocks, and what you need to start." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Get Started</span>
+            <span class="badge badge--beginner">Beginner</span>
+            <span>⏱️ 8 min</span>
+          </div>
+          <h1>Introduction</h1>
+          <p class="doc-lead">
+            Welcome to the bootcamp. You'll go from your first agent to a secured,
+            observable, multi-agent platform — all with the Microsoft Agent Framework for
+            Python (1.8.x).
+          </p>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Who this is for</div>
+              <div class="callout__body">
+                Engineers and architects shipping AI agents into real products. We favour
+                production concerns — auth, tools, threads, observability — over toy demos.
+              </div>
+            </div>
+          </div>
+
+          <h2>The mental model</h2>
+          <p>
+            Everything in the framework composes from a few building blocks. A
+            <strong>chat client</strong> talks to a model; an <strong>agent</strong> wraps
+            that client with instructions, tools, and memory; <strong>workflows</strong> and
+            <strong>multi-agent</strong> patterns coordinate many agents; and
+            <strong>MCP</strong> lets agents reach tools across a network boundary.
+          </p>
+
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Agent Framework building blocks</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TD
+    CC[Chat Client] --> A[Agent]
+    A --> FT[Function Tools]
+    A --> HT[Hosted &amp; MCP Tools]
+    A --> TH[Threads]
+    A --> WF[Workflows]
+    WF --> MA[Multi-Agent]
+    MA --> A2A[Agent-to-Agent]
+    MCP[MCP] --> RM[Remote MCP Servers]
+    RM --> HT
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class A hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">From a single chat client to coordinated multi-agent systems over MCP.</div>
+          </div>
+
+          <h2>What you'll build</h2>
+          <div class="card-grid">
+            <a class="card" href="setup-and-configuration.html"><div class="card__icon">🚀</div><div class="card__title">Get Started</div><div class="card__desc">Environment, first agent, providers.</div></a>
+            <a class="card" href="function-tools.html"><div class="card__icon">🧱</div><div class="card__title">Core Foundations</div><div class="card__desc">Tools, threads, streaming.</div></a>
+            <a class="card" href="patterns-overview.html"><div class="card__icon">🔀</div><div class="card__title">Tools &amp; Workflows</div><div class="card__desc">Structured output and orchestration.</div></a>
+            <a class="card" href="patterns-overview.html"><div class="card__icon">🛰️</div><div class="card__title">Multi-Agent</div><div class="card__desc">Supervisors, A2A, remote MCP.</div></a>
+          </div>
+
+          <h2>What you need</h2>
+          <ol class="steps">
+            <li><strong>Python 3.13+</strong> — the bootcamp targets the current runtime.</li>
+            <li><strong>uv</strong> — fast environment and dependency management.</li>
+            <li><strong>Azure OpenAI or Microsoft Foundry</strong> — a deployed chat model.</li>
+            <li><strong>Comfort with async/await</strong> — agent runs are asynchronous.</li>
+          </ol>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Read it like docs, build it like a lab</div>
+              <div class="callout__body">Every lesson pairs a concept with a runnable <code>modules/</code> folder. Read, then run.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

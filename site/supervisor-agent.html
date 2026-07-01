@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Supervisor Agent · Agent Framework Bootcamp</title>
+  <meta name="description" content="Coordinate a team of specialists with an LLM-powered manager using MagenticBuilder — build the Helix incident war-room where a supervisor plans, delegates, tracks progress, and replans until a production incident is resolved." />
+  <script>
+    (function () { try { var t = localStorage.getItem('af-theme'); if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header id="navbar"></header>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="content">
+      <div class="docs-grid">
+        <article id="doc" class="prose">
+          <div class="doc-eyebrow">
+            <span class="sect">Multi-Agent &amp; Production</span>
+            <span class="badge badge--advanced">Advanced</span>
+            <span>⏱️ 17 min</span>
+          </div>
+          <h1>Supervisor Agent</h1>
+          <p class="doc-lead">
+            <a href="agent-as-tool.html">Agent-as-tool</a> delegates one bounded sub-task. But some problems
+            need a <strong>manager that plans</strong>: decompose the goal, pick who works next, track
+            progress, and <em>replan</em> when things stall. That's the <strong>Magentic</strong> pattern —
+            an LLM-powered supervisor coordinating a team. You'll build the <strong>Helix incident
+            war-room</strong>, where a supervisor drives a diagnostician, a researcher, and a remediation
+            engineer until a production outage is resolved.
+          </p>
+
+          <h2>The manager runs the loop</h2>
+          <div class="diagram">
+            <div class="diagram__head"><div class="diagram__title">Helix: Magentic supervisor coordinating specialists</div></div>
+            <div class="diagram__body">
+              <pre class="mermaid">
+flowchart TD
+    G["🚨 Incident: checkout 500s"] --> M{{"🧭 Supervisor (manager)"}}
+    M -->|"plan + assign"| D["🔎 Diagnostician"]
+    M -->|"plan + assign"| R["📚 Researcher"]
+    M -->|"plan + assign"| E["🛠️ Remediation Engineer"]
+    D -->|"findings"| M
+    R -->|"known issues"| M
+    E -->|"fix applied"| M
+    M -->|"progress stalled?"| M
+    M --> OUT[["✅ Resolution report"]]
+    classDef hi fill:#6366f1,stroke:#4f46e5,color:#fff;
+    class M,D,R,E hi;
+              </pre>
+            </div>
+            <div class="diagram__caption">The supervisor maintains a plan and a progress ledger. After each round it decides the next agent, or replans if the team stalls — no hard-coded routing.</div>
+          </div>
+
+          <h2>1 · Build the specialist team</h2>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">import asyncio
+from agent_framework import MagenticBuilder
+from agent_framework.azure import AzureOpenAIChatClient
+
+
+async def main() -> None:
+    client = AzureOpenAIChatClient()
+
+    diagnostician = client.create_agent(
+        name="Diagnostician",
+        instructions=(
+            "You triage production incidents. Form hypotheses about root cause from "
+            "symptoms, logs, and recent deploys. State the single most likely cause."
+        ),
+    )
+    researcher = client.create_agent(
+        name="Researcher",
+        instructions=(
+            "You search runbooks and past incidents for matching signatures and known "
+            "mitigations. Cite the runbook step that applies."
+        ),
+    )
+    remediation = client.create_agent(
+        name="RemediationEngineer",
+        instructions=(
+            "You propose a concrete, minimal, reversible fix and the rollback step. "
+            "Be specific about commands or config changes."
+        ),
+    )</code></pre>
+          </div>
+
+          <h2>2 · Wire the Magentic supervisor</h2>
+          <p>
+            <code>.participants(**agents)</code> registers the team by name. <code>.with_standard_manager(...)</code>
+            attaches the Magentic-One manager (its planning prompts come from the original paper) and sets the
+            inner-loop limits: <code>max_round_count</code> caps total coordination rounds,
+            <code>max_stall_count</code> triggers a replan when progress stops.
+          </p>
+          <div class="code-block">
+            <div class="code-block__bar"><span class="code-block__dots"><i></i><i></i><i></i></span><span class="code-block__title">main.py (cont.)</span><button class="code-block__copy">Copy</button></div>
+            <pre><code class="language-python">    workflow = (
+        MagenticBuilder()
+        .participants(
+            diagnostician=diagnostician,
+            researcher=researcher,
+            remediation=remediation,
+        )
+        .with_standard_manager(
+            chat_client=client,
+            max_round_count=12,
+            max_stall_count=3,
+            max_reset_count=2,
+        )
+        .build()
+    )
+
+    task = (
+        "Checkout is returning HTTP 500 for ~30% of users since the 14:02 deploy. "
+        "Find the root cause and propose a safe fix with a rollback plan."
+    )
+
+    async for event in workflow.run_stream(task):
+        if event.text:
+            print(event.text, end="", flush=True)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal__bar"><span class="terminal__dots"><i></i><i></i><i></i></span><span class="terminal__title">python main.py — helix war-room</span></div>
+            <pre class="terminal__body"><span class="l-comment">[manager] plan: 1) diagnose 2) match runbook 3) propose fix</span>
+<span class="l-rule">→ diagnostician</span>
+<span class="l-agent">Most likely cause: the 14:02 deploy shipped a new DB connection-pool size of 5;
+under load the pool is exhausted, producing 500s on checkout writes.</span>
+<span class="l-rule">→ researcher</span>
+<span class="l-agent">Runbook DB-07 matches "pool exhaustion after deploy" — step 3 says raise pool
+size or roll back the offending change.</span>
+<span class="l-rule">→ remediation</span>
+<span class="l-agent">Fix: set CHECKOUT_DB_POOL=25 via config and restart the checkout deployment.
+Rollback: revert deploy 14:02 (git revert a1b2c3d) if errors persist 5 min.</span>
+<span class="l-comment">[manager] goal satisfied → synthesizing resolution report</span>
+<span class="l-agent">RESOLUTION: connection-pool exhaustion from deploy 14:02. Applied pool=25;
+monitored 10 min, error rate back to 0.1%. Rollback documented.</span></pre>
+          </div>
+
+          <h2>Supervisor vs. the other patterns</h2>
+          <div class="spec-table">
+            <table>
+              <thead><tr><th>Pattern</th><th>Who decides next step</th><th>Use when</th></tr></thead>
+              <tbody>
+                <tr><td><a href="workflows-sequential.html">Sequential</a></td><td>You (fixed order)</td><td>Steps always run in the same order</td></tr>
+                <tr><td><a href="workflows-handoff.html">Handoff</a></td><td>Current agent</td><td>Route a conversation to its owner</td></tr>
+                <tr><td><a href="agent-as-tool.html">Agent-as-tool</a></td><td>Coordinator's model (one call each)</td><td>Compose bounded sub-tasks</td></tr>
+                <tr><td><strong>Supervisor (Magentic)</strong></td><td>Manager, every round + replans</td><td>Open-ended goals needing planning</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout callout--tip">
+            <div class="callout__icon">💡</div>
+            <div>
+              <div class="callout__title">Stalls trigger replanning</div>
+              <div class="callout__body">If specialists go <code>max_stall_count</code> rounds without progress, the manager rewrites the plan instead of looping forever. <code>max_reset_count</code> caps how many times it may start over — your guardrail against runaway cost.</div>
+            </div>
+          </div>
+
+          <div class="callout callout--enterprise">
+            <div class="callout__icon">🏢</div>
+            <div>
+              <div class="callout__title">Add a human to the plan</div>
+              <div class="callout__body">For high-stakes work, call <code>.with_plan_review(enable=True)</code> so a human approves or revises the manager's plan before any specialist runs, or <code>.with_human_input_on_stall()</code> to step in when the team is stuck. These emit <code>MagenticHumanInterventionRequest</code> events — the same approval mechanics you'll wire up in <a href="human-in-the-loop.html">Human in the Loop</a>.</div>
+            </div>
+          </div>
+        </article>
+        <nav id="toc"></nav>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">Microsoft Agent Framework Bootcamp · <a href="index.html">Home</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
